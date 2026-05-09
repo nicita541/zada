@@ -23,7 +23,10 @@ router.get(
 );
 
 router.post("/checkout", requireAuth, (_req, res) => {
-  res.status(409).json({ error: "Subscription purchase is not available yet." });
+  res.json({
+    available: false,
+    message: "Subscription purchase is not available yet."
+  });
 });
 
 router.post(

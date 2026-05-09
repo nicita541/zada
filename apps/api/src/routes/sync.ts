@@ -17,7 +17,7 @@ router.get(
       prisma.task.findMany({ where: { userId } }),
       prisma.note.findMany({ where: { userId } }),
       prisma.userSettings.findUnique({ where: { userId } }),
-      prisma.syncChangeLog.findFirst({ where: { userId }, orderBy: { revision: "desc" } })
+      prisma.changeLog.findFirst({ where: { userId }, orderBy: { revision: "desc" } })
     ]);
 
     res.json({
@@ -51,7 +51,16 @@ router.post(
         continue;
       }
 
-      const created = await prisma.syncChangeLog.create({
+      const payloadRecord =
+        typeof change.payload === "object" && change.payload !== null
+          ? (change.payload as Record<string, unknown>)
+          : null;
+
+      if (change.entityType === "note" && payloadRecord?.syncStatus === "local_only") {
+        continue;
+      }
+
+      const created = await prisma.changeLog.create({
         data: {
           userId,
           workspaceId: change.workspaceId ?? null,
@@ -72,7 +81,7 @@ router.get(
   "/changes",
   asyncHandler(async (req, res) => {
     const since = Number(req.query.since ?? 0);
-    const changes = await prisma.syncChangeLog.findMany({
+    const changes = await prisma.changeLog.findMany({
       where: {
         userId: currentUserId(req),
         revision: { gt: Number.isFinite(since) ? since : 0 }

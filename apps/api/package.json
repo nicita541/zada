@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.13.0",
-    "@zada/shared": "file:../../packages/shared",
+    "@zada/shared": "0.1.0",
     "argon2": "^0.40.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",

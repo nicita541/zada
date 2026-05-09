@@ -1,6 +1,17 @@
 import Dexie, { type Table } from "dexie";
 import type { LocalNoteDraft, NoteSyncSettings, SyncQueueItem } from "@zada/shared";
 
+export interface LocalEntity {
+  id: string;
+  workspaceId?: string | null;
+  projectId?: string | null;
+  title?: string;
+  name?: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  [key: string]: unknown;
+}
+
 export interface LocalTask {
   id: string;
   title: string;
@@ -20,11 +31,24 @@ export interface LocalSubscriptionCache {
 }
 
 export class ZadaLocalDatabase extends Dexie {
+  projects!: Table<LocalEntity, string>;
+  board_columns!: Table<LocalEntity, string>;
   tasks!: Table<LocalTask, string>;
+  tags!: Table<LocalEntity, string>;
+  task_tags!: Table<LocalEntity, string>;
+  subtasks!: Table<LocalEntity, string>;
+  reminders!: Table<LocalEntity, string>;
+  habits!: Table<LocalEntity, string>;
+  habit_logs!: Table<LocalEntity, string>;
   notes!: Table<LocalNoteDraft, string>;
-  syncQueue!: Table<SyncQueueItem, string>;
-  noteSettings!: Table<NoteSyncSettings & { id: "notes" }, string>;
-  subscription!: Table<LocalSubscriptionCache, string>;
+  references!: Table<LocalEntity, string>;
+  code_snippets!: Table<LocalEntity, string>;
+  milestones!: Table<LocalEntity, string>;
+  focus_sessions!: Table<LocalEntity, string>;
+  sync_queue!: Table<SyncQueueItem, string>;
+  sync_meta!: Table<LocalEntity, string>;
+  subscription_cache!: Table<LocalSubscriptionCache, string>;
+  note_sync_settings!: Table<NoteSyncSettings & { id: "notes" }, string>;
 
   constructor() {
     super("zada-local");
@@ -34,6 +58,26 @@ export class ZadaLocalDatabase extends Dexie {
       syncQueue: "id, entityType, entityId, createdAt",
       noteSettings: "id",
       subscription: "id"
+    });
+    this.version(2).stores({
+      projects: "id, workspaceId, updatedAt",
+      board_columns: "id, workspaceId, projectId, updatedAt",
+      tasks: "id, completed, dueDate, updatedAt",
+      tags: "id, workspaceId, name, updatedAt",
+      task_tags: "id, taskId, tagId, updatedAt",
+      subtasks: "id, taskId, updatedAt",
+      reminders: "id, remindAt, updatedAt",
+      habits: "id, workspaceId, updatedAt",
+      habit_logs: "id, habitId, loggedFor, updatedAt",
+      notes: "id, syncStatus, updatedAt",
+      references: "id, workspaceId, projectId, updatedAt",
+      code_snippets: "id, workspaceId, projectId, language, updatedAt",
+      milestones: "id, workspaceId, projectId, updatedAt",
+      focus_sessions: "id, taskId, startedAt, updatedAt",
+      sync_queue: "id, entityType, entityId, createdAt",
+      sync_meta: "id, updatedAt",
+      subscription_cache: "id, updatedAt",
+      note_sync_settings: "id"
     });
   }
 }

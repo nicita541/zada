@@ -35,6 +35,7 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Badge, Button, Panel } from "@zada/ui";
 import { canUseFeatureOffline, gameDevTemplate, parseInternalLinks, premiumFeatures } from "@zada/shared";
 import { useAppStore, type ViewId } from "./store/appStore";
+import { api } from "./lib/api";
 
 const navItems: Array<{ id: ViewId; label: string; icon: ReactNode }> = [
   { id: "today", label: "Today", icon: <ClipboardList size={18} /> },
@@ -477,6 +478,7 @@ function ImportView() {
 
 function GameDevView() {
   const createGameDevWorkspace = useAppStore((state) => state.createGameDevWorkspace);
+  const setActiveView = useAppStore((state) => state.setActiveView);
   const subscription = useAppStore((state) => state.subscription);
   const access = canUseFeatureOffline("game_dev_workspace", subscription);
 
@@ -495,9 +497,10 @@ function GameDevView() {
               </article>
             ))}
           </div>
-          <Button onClick={createGameDevWorkspace}>
+          {!access.allowed ? <div className="inline-alert">Game Dev Workspace is a premium feature.</div> : null}
+          <Button onClick={access.allowed ? createGameDevWorkspace : () => setActiveView("subscription")} disabled={!access.allowed}>
             <Plus size={16} />
-            Create
+            {access.allowed ? "Create" : "Upgrade"}
           </Button>
         </Panel>
         <Panel>
@@ -578,12 +581,70 @@ function SettingsView() {
     <div className="page-grid">
       <section className="page-main">
         <PageHeader title="Settings" meta="Workspace preferences" />
+        <AuthPanel />
         <NoteSyncPanel />
       </section>
       <aside className="page-side">
         <SubscriptionView compact />
       </aside>
     </div>
+  );
+}
+
+function AuthPanel() {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("demo@zada.local");
+  const [name, setName] = useState("Demo User");
+  const [password, setPassword] = useState("password123");
+  const [message, setMessage] = useState(localStorage.getItem("zada.accessToken") ? "Signed in locally" : "Not signed in");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const response =
+        mode === "login"
+          ? await api.login({ email, password })
+          : await api.register({ email, password, name });
+      localStorage.setItem("zada.accessToken", response.accessToken);
+      localStorage.setItem("zada.refreshToken", response.refreshToken);
+      setMessage(`Signed in as ${response.user.email}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Authentication failed");
+    }
+  }
+
+  return (
+    <Panel>
+      <PanelTitle icon={<Settings size={18} />} title="Account" />
+      <form className="auth-form" onSubmit={submit}>
+        <div className="segmented">
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+            Login
+          </button>
+          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
+            Register
+          </button>
+        </div>
+        {mode === "register" ? <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" /> : null}
+        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" />
+        <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" />
+        <div className="toolbar">
+          <Button type="submit">{mode === "login" ? "Login" : "Register"}</Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              localStorage.removeItem("zada.accessToken");
+              localStorage.removeItem("zada.refreshToken");
+              setMessage("Signed out locally");
+            }}
+          >
+            Logout
+          </Button>
+        </div>
+        <span className="form-message">{message}</span>
+      </form>
+    </Panel>
   );
 }
 

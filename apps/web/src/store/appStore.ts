@@ -110,8 +110,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const [tasks, notes, noteSettings, subscription] = await Promise.all([
       db.tasks.toArray(),
       db.notes.toArray(),
-      db.noteSettings.get("notes"),
-      db.subscription.get("current")
+      db.note_sync_settings.get("notes"),
+      db.subscription_cache.get("current")
     ]);
 
     if (tasks.length === 0) {
@@ -143,9 +143,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       updatedAt: now()
     };
 
-    await db.transaction("rw", db.tasks, db.syncQueue, async () => {
+    await db.transaction("rw", db.tasks, db.sync_queue, async () => {
       await db.tasks.put(task);
-      await db.syncQueue.put(createSyncQueueItem("task", task.id, "create", task));
+      await db.sync_queue.put(createSyncQueueItem("task", task.id, "create", task));
     });
     set({ tasks: [task, ...get().tasks] });
   },
@@ -156,9 +156,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const updated = { ...task, completed: !task.completed, updatedAt: now() };
-    await db.transaction("rw", db.tasks, db.syncQueue, async () => {
+    await db.transaction("rw", db.tasks, db.sync_queue, async () => {
       await db.tasks.put(updated);
-      await db.syncQueue.put(createSyncQueueItem("task", updated.id, "update", updated));
+      await db.sync_queue.put(createSyncQueueItem("task", updated.id, "update", updated));
     });
 
     set({ tasks: get().tasks.map((candidate) => (candidate.id === id ? updated : candidate)) });
@@ -180,9 +180,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       updatedAt: now()
     }));
 
-    await db.transaction("rw", db.tasks, db.syncQueue, async () => {
+    await db.transaction("rw", db.tasks, db.sync_queue, async () => {
       await db.tasks.bulkPut(tasks);
-      await db.syncQueue.bulkPut(tasks.map((task) => createSyncQueueItem("task", task.id, "create", task)));
+      await db.sync_queue.bulkPut(tasks.map((task) => createSyncQueueItem("task", task.id, "create", task)));
     });
 
     set({ tasks: [...tasks, ...get().tasks], activeView: "today" });
@@ -201,10 +201,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       updatedAt: now()
     };
 
-    await db.transaction("rw", db.notes, db.syncQueue, async () => {
+    await db.transaction("rw", db.notes, db.sync_queue, async () => {
       await db.notes.put(note);
       if (note.syncStatus !== "local_only") {
-        await db.syncQueue.put(createSyncQueueItem("note", note.id, existing ? "update" : "create", note));
+        await db.sync_queue.put(createSyncQueueItem("note", note.id, existing ? "update" : "create", note));
       }
     });
 
@@ -214,11 +214,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   toggleNotesSync: async (enabled) => {
     const settings = { notesEnabled: enabled, uploadLocalNotesOnEnable: enabled };
-    await db.noteSettings.put({ id: "notes", ...settings });
+    await db.note_sync_settings.put({ id: "notes", ...settings });
     set({ noteSettings: settings });
   },
   cacheSubscription: async (snapshot) => {
-    await db.subscription.put({ id: "current", snapshot, updatedAt: now() });
+    await db.subscription_cache.put({ id: "current", snapshot, updatedAt: now() });
     set({ subscription: snapshot });
   },
   manualSync: async () => {

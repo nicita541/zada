@@ -5,13 +5,13 @@ import { db } from "./db";
 const serverOwnedEntities = new Set(["subscription", "premium_entitlement"]);
 
 export async function runManualSync() {
-  const noteSettings = (await db.noteSettings.get("notes")) ?? {
+  const noteSettings = (await db.note_sync_settings.get("notes")) ?? {
     id: "notes" as const,
     notesEnabled: true,
     uploadLocalNotesOnEnable: false
   };
 
-  const queued = await db.syncQueue.toArray();
+  const queued = await db.sync_queue.toArray();
   const eligible = queued.filter((item) => isEligibleForSync(item, noteSettings));
 
   if (eligible.length === 0) {
@@ -19,7 +19,7 @@ export async function runManualSync() {
   }
 
   await api.syncPush(eligible);
-  await db.syncQueue.bulkDelete(eligible.map((item) => item.id));
+  await db.sync_queue.bulkDelete(eligible.map((item) => item.id));
   return { pushed: eligible.length };
 }
 

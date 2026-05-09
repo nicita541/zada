@@ -1,72 +1,112 @@
 # Zada
 
-Zada — это offline-first рабочее пространство для продуктивности: задач, проектов, заметок, привычек, фокус-сессий и планирования разработки игр. Этот репозиторий теперь структурирован как monorepo, чтобы web, API, desktop, mobile и shared packages могли развиваться вместе. 
+Zada is an offline-first workspace for personal productivity and game development planning. The project is a monorepo with shared domain code, a React web app, an Express API, Electron desktop packaging, and a Capacitor mobile shell.
 
-## Структура workspace
+## Workspace
 
 ```txt
 apps/
-  web/       React + Vite app, PWA shell, локальные данные в IndexedDB
+  web/       React + Vite app, PWA shell, IndexedDB local data
   api/       Express + TypeScript API, Prisma schema, auth, sync, billing gates
-  desktop/   Electron wrapper для web build и безопасный bridge для локальных файлов
-  mobile/    Capacitor shell для Android-first mobile packaging
+  desktop/   Electron wrapper and secure local file bridge
+  mobile/    Capacitor Android-first shell
 packages/
-  shared/    Domain types, parsers, premium gates, sync helpers
-  api-client Typed browser API client
-  ui/        Небольшие общие UI primitives
+  shared/    Types, parsers, premium gates, notes sync, game-dev template
+  api-client Browser API client
+  ui/        Shared React UI primitives
 ```
 
-## Локальная разработка
+## Windows Local Run
 
-1. Установите зависимости:
+Run from PowerShell:
 
 ```powershell
+cd "E:\Задачник\zada"
 npm install
-```
-
-2. Скопируйте значения окружения по умолчанию и обновите секреты:
-
-```powershell
 Copy-Item .env.example .env
+Copy-Item .env apps/api/.env -Force
+docker compose up -d postgres
+npm run prisma:generate
+npm run prisma:migrate
+npm run dev:api
 ```
 
-3. Запустите Postgres:
+In a second terminal:
 
 ```powershell
-docker compose up -d postgres
+cd "E:\Задачник\zada"
+npm run dev:web
 ```
 
-4. Сгенерируйте Prisma client и выполните миграции:
+Open:
+
+- Web: `http://localhost:5173`
+- API: `http://localhost:3000/api`
+- Health: `http://localhost:3000/health`
+
+## Validation Commands
+
+```powershell
+npm run prisma:generate
+npm run prisma:migrate
+npm run typecheck
+npm test
+npm run build
+```
+
+## Environment
+
+The API loads `.env` from its current workspace first and then falls back to the root `.env`. Prisma CLI is most reliable when the root env is copied into `apps/api/.env`:
+
+```powershell
+Copy-Item .env apps/api/.env -Force
+```
+
+## Troubleshooting
+
+### Prisma DATABASE_URL not found
+
+Copy the root env file into the API workspace:
+
+```powershell
+Copy-Item .env apps/api/.env -Force
+```
+
+Then rerun:
 
 ```powershell
 npm run prisma:generate
 npm run prisma:migrate
 ```
 
-5. Запустите API и web app в отдельных терминалах:
+### Vite failed to resolve @zada/shared, @zada/ui, or @zada/api-client
 
-```powershell
-npm run dev:api
-npm run dev:web
-```
+The workspace packages expose TypeScript source entrypoints and Vite has explicit aliases to:
 
-URL по умолчанию:
+- `packages/shared/src/index.ts`
+- `packages/api-client/src/index.ts`
+- `packages/ui/src/index.ts`
 
-* Web: `http://localhost:5173`
-* API: `http://localhost:3000/api`
-* Health: `http://localhost:3000/health`
+Run `npm install` again after package changes so workspace links are refreshed.
 
-## Реализованный фундамент
+## Implemented MVP Foundation
 
-* Общий парсер outline задач для нумерованных задач, bullet-списков, checkboxes, tags, priority, dates, repeat/reminder metadata, task types и parent-child relations.
-* Общий парсер внутренних ссылок для `[[Task: ...]]`, `[[GDD: ...]]`, snippets, bugs, milestones, notes, concepts и files.
-* Общий каталог premium features и offline entitlement rules.
-* Общая модель статуса синхронизации заметок для состояний local-only, pending, synced и error.
-* Skeleton API routes для auth, core projects/tasks, sync, import preview/confirm, billing status, unavailable checkout и manual admin subscription/entitlement grants.
-* React app shell с desktop sidebar, mobile bottom navigation, quick add, task list, import preview, notes sync controls, game dev dashboard, subscription screen, focus, stats и settings.
-* Безопасный Electron preload bridge для ссылок на локальные файлы.
-* Capacitor mobile shell и PWA manifest/service worker.
+- Shared task outline parser for numbered tasks, bullets, checkboxes, descriptions in parentheses, tags, priorities, dates, repeats, reminders, task types, and parent-child relations.
+- Shared quick-add parser with tags, priorities, project refs, task types, explicit dates, and Russian natural dates: `сегодня`, `завтра`, `послезавтра`.
+- Shared internal link parser for `[[Task: ...]]`, `[[GDD: ...]]`, `[[Snippet: ...]]`, notes, concepts, files, bugs, and milestones.
+- Premium gates for online and offline entitlement checks, including `currentPeriodEnd`, `lifetime_dev`, and `admin`.
+- Notes sync helpers for `local_only`, `pending`, `synced`, and `error`.
+- API routes for auth, import preview/confirm, billing status/features/checkout, admin grants/revokes, sync bootstrap/push/changes, and core CRUD endpoints.
+- Prisma schema for users, sessions, workspaces, projects, board columns, tasks, tags, subtasks, reminders, habits, notes, references, code snippets, milestones, focus sessions, subscriptions, entitlements, devices, settings, and change log.
+- React app shell with desktop sidebar, mobile bottom navigation, quick add, task list, import preview, notes sync controls, subscription screen, premium-gated game-dev workspace, focus, stats, settings, and minimal login/register UI.
+- IndexedDB stores for projects, board columns, tasks, tags, subtasks, notes, references, code snippets, milestones, focus sessions, sync queue, sync metadata, subscription cache, and note sync settings.
+- Electron preload bridge for `window.zadaDesktop.openLocalPath(path)` and `window.zadaDesktop.revealInExplorer(path)` with `contextIsolation` enabled and `nodeIntegration` disabled.
+- Capacitor config wired to the shared web build.
 
-## Границы MVP
+## Not Implemented Yet
 
-Интеграция платёжного провайдера, team roles, public sharing, AI features, third-party calendar imports, S3 file storage, полноценный iOS release и встроенный Git client намеренно вынесены за рамки MVP.
+- Real payment provider integration.
+- Full production sync conflict handling.
+- Full Android/iOS native builds and store release setup.
+- Public sharing, teams, AI, Google Calendar, S3 storage, built-in Git client.
+- Deep production UX for every CRUD entity. The current goal is a runnable MVP foundation, not the final product.

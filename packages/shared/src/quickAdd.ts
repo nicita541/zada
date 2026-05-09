@@ -20,7 +20,7 @@ const validTaskTypes = new Set<TaskType>([
 const validPriorities = new Set<Priority>(["p1", "p2", "p3", "p4"]);
 const validRepeats = new Set<RepeatRule>(["daily", "weekly", "monthly"]);
 
-export function parseQuickAdd(input: string): QuickAddResult {
+export function parseQuickAdd(input: string, options: { now?: Date } = {}): QuickAddResult {
   const tags = new Set<string>();
   let priority: Priority | null = null;
   let dueDate: string | null = null;
@@ -33,6 +33,12 @@ export function parseQuickAdd(input: string): QuickAddResult {
 
   const titleParts: string[] = [];
   for (const token of tokenize(input)) {
+    const naturalDate = parseNaturalDateToken(token, options.now ?? new Date());
+    if (naturalDate) {
+      dueDate = naturalDate;
+      continue;
+    }
+
     if (token.startsWith("#") && token.length > 1) {
       tags.add(token.slice(1));
       continue;
@@ -131,4 +137,31 @@ function tokenize(input: string): string[] {
   }
 
   return tokens;
+}
+
+function parseNaturalDateToken(token: string, now: Date): string | null {
+  const normalized = token.trim().toLowerCase();
+  const offsets: Record<string, number> = {
+    today: 0,
+    "сегодня": 0,
+    tomorrow: 1,
+    "завтра": 1,
+    "послезавтра": 2
+  };
+
+  const offset = offsets[normalized];
+  if (offset === undefined) {
+    return null;
+  }
+
+  const date = new Date(now);
+  date.setDate(date.getDate() + offset);
+  return formatDateOnly(date);
+}
+
+function formatDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }

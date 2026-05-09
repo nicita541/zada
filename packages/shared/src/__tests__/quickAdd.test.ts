@@ -16,4 +16,12 @@ describe("parseQuickAdd", () => {
       projectRef: "rpg"
     });
   });
+
+  it("parses Russian natural dates", () => {
+    const base = new Date("2026-05-09T10:00:00+07:00");
+
+    expect(parseQuickAdd("Сделать билд сегодня", { now: base }).dueDate).toBe("2026-05-09");
+    expect(parseQuickAdd("Проверить баг завтра", { now: base }).dueDate).toBe("2026-05-10");
+    expect(parseQuickAdd("Написать GDD послезавтра", { now: base }).dueDate).toBe("2026-05-11");
+  });
 });
