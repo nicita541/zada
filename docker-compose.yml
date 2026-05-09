@@ -1,0 +1,48 @@
+name: taskbook
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: taskbook
+      POSTGRES_USER: taskbook
+      POSTGRES_PASSWORD: taskbook_password
+      TZ: Asia/Novosibirsk
+    volumes:
+      - taskbook_postgres:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskbook -d taskbook"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env.docker
+    ports:
+      - "3000:3000"
+
+  app:
+    profiles:
+      - web
+    build:
+      context: .
+      dockerfile: deploy/app.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  taskbook_postgres:

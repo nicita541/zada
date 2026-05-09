@@ -1,0 +1,53 @@
+{
+  "name": "taskbook-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desktop client for Taskbook",
+  "main": "main.js",
+  "author": "Taskbook",
+  "license": "UNLICENSED",
+  "scripts": {
+    "prepare-app": "node scripts/prepare-app.cjs",
+    "start": "npm run prepare-app && electron .",
+    "pack": "npm run prepare-app && electron-builder --dir",
+    "dist": "npm run prepare-app && electron-builder --win nsis",
+    "dist:portable": "npm run prepare-app && electron-builder --win portable"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "local.taskbook.desktop",
+    "productName": "Задачник",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Задачник"
+    }
+  }
+}

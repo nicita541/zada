@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Задачник</title>
+    <meta name="theme-color" content="#3f6df6" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Задачник" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon-192.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="rail" aria-label="Основная навигация">
+        <button class="avatar" type="button" title="Профиль" aria-label="Профиль">З</button>
+        <button class="rail-btn active" type="button" data-nav="tasks" title="Задачи" aria-label="Задачи">
+          <span class="icon icon-check"></span>
+        </button>
+        <button class="rail-btn" type="button" data-nav="calendar" title="Календарь" aria-label="Календарь">
+          <span class="icon icon-calendar"></span>
+        </button>
+        <button class="rail-btn" type="button" data-nav="matrix" title="Матрица" aria-label="Матрица">
+          <span class="icon icon-grid"></span>
+        </button>
+        <button class="rail-btn" type="button" data-nav="focus" title="Фокус" aria-label="Фокус">
+          <span class="icon icon-target"></span>
+        </button>
+        <button class="rail-btn" type="button" data-nav="habits" title="Привычки" aria-label="Привычки">
+          <span class="icon icon-repeat"></span>
+        </button>
+        <button class="rail-btn" type="button" data-nav="countdown" title="Обратный отсчёт" aria-label="Обратный отсчёт">
+          <span class="icon icon-today"></span>
+        </button>
+        <button class="rail-btn" type="button" data-nav="stats" title="Статистика" aria-label="Статистика">
+          <span class="icon icon-chart"></span>
+        </button>
+        <div class="rail-spacer"></div>
+        <button class="rail-btn" type="button" id="syncBtn" title="Сохранить" aria-label="Сохранить">
+          <span class="icon icon-sync"></span>
+        </button>
+        <button class="rail-btn" type="button" id="settingsBtn" title="Настройки" aria-label="Настройки">
+          <span class="icon icon-settings"></span>
+        </button>
+        <button class="rail-btn" type="button" id="helpBtn" title="Горячие клавиши" aria-label="Горячие клавиши">
+          <span class="icon icon-help"></span>
+        </button>
+      </aside>
+
+      <aside class="sidebar" aria-label="Списки задач">
+        <div class="sidebar-search">
+          <span class="icon icon-search"></span>
+          <input id="searchInput" type="search" placeholder="Поиск" aria-label="Поиск задач" />
+        </div>
+
+        <nav class="nav-section" aria-label="Умные списки">
+          <button class="nav-item active" type="button" data-filter="today">
+            <span class="icon icon-today"></span>
+            <span>Сегодня</span>
+            <output data-count="today">0</output>
+          </button>
+          <button class="nav-item" type="button" data-filter="next7">
+            <span class="icon icon-week"></span>
+            <span>Следующие 7 дней</span>
+            <output data-count="next7">0</output>
+          </button>
+          <button class="nav-item" type="button" data-filter="inbox">
+            <span class="icon icon-inbox"></span>
+            <span>Входящие</span>
+            <output data-count="inbox">0</output>
+          </button>
+          <button class="nav-item" type="button" data-filter="all">
+            <span class="icon icon-list"></span>
+            <span>Все задачи</span>
+            <output data-count="all">0</output>
+          </button>
+        </nav>
+
+        <div class="side-heading">
+          <span>Список</span>
+          <button class="tiny-btn" type="button" id="addListBtn" title="Создать список" aria-label="Создать список">+</button>
+        </div>
+        <nav class="nav-section" id="listsNav" aria-label="Пользовательские списки"></nav>
+
+        <div class="side-heading">
+          <span>Метки</span>
+          <button class="tiny-btn" type="button" id="addTagBtn" title="Создать метку" aria-label="Создать метку">+</button>
+        </div>
+        <nav class="nav-section tags-nav" id="tagsNav" aria-label="Метки"></nav>
+
+        <div class="side-heading">
+          <span>Фильтры</span>
+          <button class="tiny-btn" type="button" id="addFilterBtn" title="Создать фильтр" aria-label="Создать фильтр">+</button>
+        </div>
+        <nav class="nav-section" id="filtersNav" aria-label="Фильтры"></nav>
+
+        <div class="nav-section bottom-nav">
+          <button class="nav-item" type="button" data-filter="completed">
+            <span class="icon icon-done"></span>
+            <span>Выполнено</span>
+            <output data-count="completed">0</output>
+          </button>
+          <button class="nav-item" type="button" data-filter="trash">
+            <span class="icon icon-trash"></span>
+            <span>Корзина</span>
+            <output data-count="trash">0</output>
+          </button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="title-wrap">
+            <button class="icon-btn" type="button" id="collapseBtn" title="Свернуть боковую панель" aria-label="Свернуть боковую панель">
+              <span class="icon icon-menu"></span>
+            </button>
+            <div>
+              <h1 id="viewTitle">Сегодня</h1>
+              <p id="viewSubtitle">Задачи на сегодня</p>
+            </div>
+          </div>
+          <div class="toolbar" role="toolbar" aria-label="Инструменты">
+            <button class="seg active" type="button" data-view="board">Доска</button>
+            <button class="seg" type="button" data-view="list">Список</button>
+            <button class="seg" type="button" data-view="calendar">Календарь</button>
+            <button class="seg" type="button" data-view="timeline">Таймлайн</button>
+            <button class="seg" type="button" data-view="matrix">Матрица</button>
+            <button class="seg" type="button" data-view="focus">Фокус</button>
+            <button class="seg" type="button" data-view="habits">Привычки</button>
+            <button class="seg" type="button" data-view="countdown">Отсчёт</button>
+            <button class="seg" type="button" data-view="notes">Заметки</button>
+            <button class="seg" type="button" data-view="stats">Статистика</button>
+          </div>
+          <div class="actions">
+            <button class="primary-btn" type="button" id="quickAddBtn">
+              <span class="icon icon-plus"></span>
+              <span>Задача</span>
+            </button>
+            <button class="icon-btn" type="button" id="sortBtn" title="Сортировка" aria-label="Сортировка">
+              <span class="icon icon-sort"></span>
+            </button>
+            <button class="icon-btn" type="button" id="moreBtn" title="Ещё" aria-label="Ещё">
+              <span class="icon icon-more"></span>
+            </button>
+          </div>
+        </header>
+
+        <section class="quick-add" id="quickAdd" aria-label="Быстрое добавление">
+          <input id="quickAddInput" type="text" placeholder="Добавьте задачу: например, «Проверить билд завтра p1 #релиз»" />
+          <button class="primary-btn" type="button" id="quickAddSubmit">Добавить</button>
+        </section>
+
+        <section class="content" id="content" aria-live="polite"></section>
+      </main>
+
+      <aside class="detail-panel" id="detailPanel" aria-label="Подробности задачи" aria-hidden="true"></aside>
+    </div>
+
+    <div class="context-menu" id="contextMenu" role="menu" aria-hidden="true"></div>
+    <div class="modal-root" id="modalRoot" aria-live="polite"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <template id="taskCardTemplate">
+      <article class="task-card" draggable="true">
+        <button class="check" type="button" aria-label="Выполнить задачу"></button>
+        <div class="task-body">
+          <div class="task-title"></div>
+          <div class="task-meta"></div>
+        </div>
+        <button class="task-menu" type="button" title="Действия" aria-label="Действия">
+          <span class="icon icon-more"></span>
+        </button>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
