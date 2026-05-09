@@ -17,6 +17,51 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+export interface CurrentUserResponse {
+  user: AuthResponse["user"];
+  workspaces: Array<{ id: string; name: string }>;
+  settings: unknown;
+}
+
+export interface ProjectDto {
+  id: string;
+  name: string;
+  description?: string | null;
+  type?: string;
+  workspaceId?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
+export interface TaskDto {
+  id: string;
+  workspaceId?: string;
+  title: string;
+  description?: string | null;
+  projectId?: string | null;
+  columnId?: string | null;
+  parentId?: string | null;
+  status?: string;
+  type?: string;
+  priority?: string | null;
+  startDate?: string | null;
+  dueDate?: string | null;
+  time?: string | null;
+  repeat?: string | null;
+  gameArea?: string | null;
+  severity?: string | null;
+  buildVersion?: string | null;
+  stepsToReproduce?: string | null;
+  expectedResult?: string | null;
+  actualResult?: string | null;
+  position?: number;
+  updatedAt?: string;
+  deletedAt?: string | null;
+  tags?: string[];
+  subtasks?: unknown[];
+  taskTags?: Array<{ tag: { name: string } }>;
+}
+
 export interface BillingStatusResponse {
   subscription: SubscriptionSnapshot;
   enabledFeatures: string[];
@@ -34,20 +79,91 @@ export class ZadaApiClient {
     return this.request<AuthResponse>("/auth/login", { method: "POST", body: input, auth: false });
   }
 
+  refresh(refreshToken: string) {
+    return this.request<Omit<AuthResponse, "user">>("/auth/refresh", {
+      method: "POST",
+      body: { refreshToken },
+      auth: false
+    });
+  }
+
+  logout(refreshToken?: string) {
+    return this.request<void>("/auth/logout", { method: "POST", body: { refreshToken } });
+  }
+
   me() {
-    return this.request("/auth/me");
+    return this.request<CurrentUserResponse>("/auth/me");
+  }
+
+  forgotPassword(input: { email: string }) {
+    return this.request<{ ok: boolean; resetToken?: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: input,
+      auth: false
+    });
+  }
+
+  resetPassword(input: { email: string; resetToken: string; password: string }) {
+    return this.request<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: input, auth: false });
   }
 
   listProjects() {
-    return this.request("/projects");
+    return this.request<{ projects: ProjectDto[] }>("/projects");
   }
 
-  listTasks() {
-    return this.request("/tasks");
+  createProject(input: { id?: string; name: string; description?: string | null; type?: string; workspaceId?: string }) {
+    return this.request<ProjectDto>("/projects", { method: "POST", body: input });
   }
 
-  createTask(input: { title: string; description?: string; type?: string; priority?: string | null; dueDate?: string }) {
-    return this.request("/tasks", { method: "POST", body: input });
+  updateProject(id: string, input: { name?: string; description?: string | null }) {
+    return this.request<ProjectDto>(`/projects/${id}`, { method: "PATCH", body: input });
+  }
+
+  deleteProject(id: string) {
+    return this.request<void>(`/projects/${id}`, { method: "DELETE" });
+  }
+
+  listTasks(filters: { projectId?: string; status?: string; priority?: string; tag?: string; dueFrom?: string; dueTo?: string } = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) {
+        params.set(key, value);
+      }
+    }
+    const query = params.toString();
+    return this.request<{ tasks: TaskDto[] }>(`/tasks${query ? `?${query}` : ""}`);
+  }
+
+  getTask(id: string) {
+    return this.request<TaskDto>(`/tasks/${id}`);
+  }
+
+  createTask(input: Partial<TaskDto> & { title: string }) {
+    return this.request<TaskDto>("/tasks", { method: "POST", body: input });
+  }
+
+  updateTask(id: string, input: Partial<TaskDto>) {
+    return this.request<TaskDto>(`/tasks/${id}`, { method: "PATCH", body: input });
+  }
+
+  deleteTask(id: string) {
+    return this.request<void>(`/tasks/${id}`, { method: "DELETE" });
+  }
+
+  completeTask(id: string) {
+    return this.request<TaskDto>(`/tasks/${id}/complete`, { method: "POST" });
+  }
+
+  uncompleteTask(id: string) {
+    return this.request<TaskDto>(`/tasks/${id}/uncomplete`, { method: "POST" });
+  }
+
+  duplicateTask(id: string) {
+    return this.request<TaskDto>(`/tasks/${id}/duplicate`, { method: "POST" });
+  }
+
+  reorderTasks(items: Array<{ id: string; position: number; columnId?: string | null }>) {
+    return this.request<{ ok: boolean }>("/tasks/reorder", { method: "POST", body: { items } });
   }
 
   previewImport(source: string) {

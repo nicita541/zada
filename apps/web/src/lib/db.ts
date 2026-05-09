@@ -12,16 +12,42 @@ export interface LocalEntity {
   [key: string]: unknown;
 }
 
-export interface LocalTask {
+export interface LocalProject {
   id: string;
-  title: string;
+  workspaceId?: string | null;
+  name: string;
   description: string | null;
   type: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface LocalTask {
+  id: string;
+  workspaceId?: string | null;
+  projectId?: string | null;
+  columnId?: string | null;
+  parentId?: string | null;
+  title: string;
+  description: string | null;
+  status?: string;
+  type: string;
   priority: string | null;
+  startDate?: string | null;
   dueDate: string | null;
+  time?: string | null;
+  repeat?: string | null;
+  gameArea?: string | null;
+  severity?: string | null;
+  buildVersion?: string | null;
+  stepsToReproduce?: string | null;
+  expectedResult?: string | null;
+  actualResult?: string | null;
+  position?: number;
   completed: boolean;
   tags: string[];
   updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface LocalSubscriptionCache {
@@ -31,7 +57,7 @@ export interface LocalSubscriptionCache {
 }
 
 export class ZadaLocalDatabase extends Dexie {
-  projects!: Table<LocalEntity, string>;
+  projects!: Table<LocalProject, string>;
   board_columns!: Table<LocalEntity, string>;
   tasks!: Table<LocalTask, string>;
   tags!: Table<LocalEntity, string>;

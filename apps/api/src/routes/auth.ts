@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+import crypto from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma";
@@ -7,6 +8,7 @@ import { createAuthSession, rotateRefreshToken } from "../services/authService";
 import { currentUserId, requireAuth } from "../auth/middleware";
 
 const router = Router();
+const resetTokens = new Map<string, { email: string; expiresAt: Date }>();
 
 const authSchema = z.object({
   email: z.string().email(),
@@ -109,13 +111,68 @@ router.get(
   })
 );
 
-router.post("/forgot-password", (_req, res) => {
-  res.json({ ok: true });
-});
+router.post(
+  "/forgot-password",
+  asyncHandler(async (req, res) => {
+    const input = z.object({ email: z.string().email() }).parse(req.body);
+    const email = input.email.toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email } });
 
-router.post("/reset-password", (_req, res) => {
-  res.status(501).json({ error: "Password reset delivery is not configured yet" });
-});
+    if (!user) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const resetToken = crypto.randomUUID();
+    resetTokens.set(resetToken, {
+      email,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 30)
+    });
+
+    res.json({ ok: true, resetToken });
+  })
+);
+
+router.post(
+  "/reset-password",
+  asyncHandler(async (req, res) => {
+    const input = z
+      .object({
+        email: z.string().email(),
+        resetToken: z.string().min(1),
+        password: z.string().min(8)
+      })
+      .parse(req.body);
+
+    const token = resetTokens.get(input.resetToken);
+    const email = input.email.toLowerCase();
+
+    if (!token || token.email !== email || token.expiresAt.getTime() < Date.now()) {
+      resetTokens.delete(input.resetToken);
+      throw new HttpError(400, "Invalid or expired reset token");
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      resetTokens.delete(input.resetToken);
+      throw new HttpError(400, "Invalid or expired reset token");
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await argon2.hash(input.password) }
+      }),
+      prisma.session.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() }
+      })
+    ]);
+
+    resetTokens.delete(input.resetToken);
+    res.json({ ok: true });
+  })
+);
 
 function publicUser(user: { id: string; email: string; name: string | null; role: string }) {
   return {

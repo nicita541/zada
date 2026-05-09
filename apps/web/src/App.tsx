@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   Archive,
   Bell,
@@ -14,10 +14,13 @@ import {
   Flame,
   Gauge,
   Import,
+  KeyRound,
   Link2,
+  LogOut,
   Moon,
   MoreHorizontal,
   NotebookText,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -26,7 +29,10 @@ import {
   Sparkles,
   Sun,
   Timer,
+  Trash2,
   Upload,
+  User,
+  X,
   Zap
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -35,7 +41,6 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Badge, Button, Panel } from "@zada/ui";
 import { canUseFeatureOffline, gameDevTemplate, parseInternalLinks, premiumFeatures } from "@zada/shared";
 import { useAppStore, type ViewId } from "./store/appStore";
-import { api } from "./lib/api";
 import { I18nProvider, useI18n, type Locale, type TranslationKey } from "./i18n";
 
 const navItems: Array<{ id: ViewId; labelKey: TranslationKey; icon: ReactNode }> = [
@@ -63,10 +68,39 @@ export default function App() {
   return (
     <I18nProvider>
       <div className="app-root">
-        <AppShell />
+        <AuthGate>
+          <AppShell />
+        </AuthGate>
       </div>
     </I18nProvider>
   );
+}
+
+function AuthGate({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
+  const authStatus = useAppStore((state) => state.authStatus);
+
+  if (authStatus === "loading") {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <div className="brand-row">
+            <div className="brand-mark">Z</div>
+            <div>
+              <div className="brand-name">{t("common.appName")}</div>
+              <div className="brand-meta">{t("auth.loadingSession")}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (authStatus === "unauthenticated") {
+    return <AuthScreen />;
+  }
+
+  return <>{children}</>;
 }
 
 function AppShell() {
@@ -75,6 +109,7 @@ function AppShell() {
   const setActiveView = useAppStore((state) => state.setActiveView);
   const syncState = useAppStore((state) => state.syncState);
   const manualSync = useAppStore((state) => state.manualSync);
+  const currentUser = useAppStore((state) => state.currentUser);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -88,7 +123,7 @@ function AppShell() {
           <div className="brand-mark">Z</div>
           <div>
             <div className="brand-name">{t("common.appName")}</div>
-            <div className="brand-meta">{t("shell.personalWorkspace")}</div>
+            <div className="brand-meta">{currentUser?.email ?? t("shell.personalWorkspace")}</div>
           </div>
         </div>
         <nav className="sidebar-nav" aria-label={t("shell.mainNavigation")}>
@@ -138,6 +173,7 @@ function AppShell() {
       </main>
 
       <MobileNav activeView={activeView} setActiveView={setActiveView} />
+      <TaskDetailModal />
       <button className="fab" title={t("shell.addTask")} onClick={() => setActiveView("today")}>
         <Plus size={22} />
       </button>
@@ -176,6 +212,7 @@ function TodayView() {
   const { t } = useI18n();
   const tasks = useAppStore((state) => state.tasks);
   const toggleTask = useAppStore((state) => state.toggleTask);
+  const selectTask = useAppStore((state) => state.selectTask);
   const completedCount = tasks.filter((task) => task.completed).length;
   const openTasks = tasks.filter((task) => !task.completed);
 
@@ -206,7 +243,7 @@ function TodayView() {
                   ))}
                 </div>
               </div>
-              <button className="icon-button small" title={t("today.openTask")}>
+              <button className="icon-button small" title={t("today.openTask")} onClick={() => selectTask(task.id)}>
                 <ChevronRight size={16} />
               </button>
             </article>
@@ -268,38 +305,125 @@ function QuickAdd() {
 
 function ProjectsView() {
   const { t } = useI18n();
+  const projects = useAppStore((state) => state.projects);
   const tasks = useAppStore((state) => state.tasks);
-  const groups = useMemo(
-    () => [
-      { title: t("projects.inbox"), count: tasks.length, color: "indigo" },
-      { title: t("projects.gameProject"), count: tasks.filter((task) => task.tags.includes("gdd")).length, color: "green" },
-      { title: t("projects.bugTracker"), count: tasks.filter((task) => task.type === "bug").length, color: "red" }
-    ],
-    [tasks, t]
-  );
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const setActiveProject = useAppStore((state) => state.setActiveProject);
+  const createProject = useAppStore((state) => state.createProject);
+  const createTask = useAppStore((state) => state.createTask);
+  const selectTask = useAppStore((state) => state.selectTask);
+  const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
+  const [taskDraft, setTaskDraft] = useState({ title: "", description: "" });
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null;
+  const projectTasks = activeProject ? tasks.filter((task) => task.projectId === activeProject.id) : [];
+
+  async function submitProject(event: FormEvent) {
+    event.preventDefault();
+    const project = await createProject(projectDraft);
+    if (project.name) {
+      setProjectDraft({ name: "", description: "" });
+    }
+  }
+
+  async function submitTask(event: FormEvent) {
+    event.preventDefault();
+    if (!taskDraft.title.trim() || !activeProject) {
+      return;
+    }
+
+    await createTask({
+      title: taskDraft.title,
+      description: taskDraft.description,
+      projectId: activeProject.id,
+      tags: []
+    });
+    setTaskDraft({ title: "", description: "" });
+  }
 
   return (
-    <section>
-      <PageHeader title={t("nav.projects")} meta={t("projects.meta")} />
-      <div className="project-grid">
-        {groups.map((project) => (
-          <article className="project-card" key={project.title}>
-            <div className={`project-swatch ${project.color}`} />
-            <h3>{project.title}</h3>
-            <p>{t("projects.linkedTasks", { count: project.count })}</p>
-            <div className="progress-track">
-              <span style={{ width: `${Math.min(project.count * 18, 100)}%` }} />
-            </div>
-          </article>
-        ))}
-      </div>
-      <BoardPreview />
-    </section>
+    <div className="page-grid">
+      <section className="page-main">
+        <PageHeader title={t("nav.projects")} meta={t("projects.meta")} />
+        <form className="project-form" onSubmit={submitProject}>
+          <input
+            value={projectDraft.name}
+            onChange={(event) => setProjectDraft({ ...projectDraft, name: event.target.value })}
+            placeholder={t("projects.namePlaceholder")}
+          />
+          <input
+            value={projectDraft.description}
+            onChange={(event) => setProjectDraft({ ...projectDraft, description: event.target.value })}
+            placeholder={t("projects.descriptionPlaceholder")}
+          />
+          <Button type="submit">
+            <Plus size={16} />
+            {t("projects.createProject")}
+          </Button>
+        </form>
+        {projects.length === 0 ? <div className="inline-alert">{t("projects.empty")}</div> : null}
+        <div className="project-grid">
+          {projects.map((project, index) => {
+            const count = tasks.filter((task) => task.projectId === project.id).length;
+            const color = index % 3 === 0 ? "indigo" : index % 3 === 1 ? "green" : "red";
+            return (
+              <article className={`project-card ${activeProject?.id === project.id ? "active" : ""}`} key={project.id}>
+                <button className="project-card-button" type="button" onClick={() => setActiveProject(project.id)}>
+                  <div className={`project-swatch ${color}`} />
+                  <h3>{project.name}</h3>
+                  <p>{project.description || t("projects.noDescription")}</p>
+                  <div className="task-meta">
+                    <span>{t("projects.linkedTasks", { count })}</span>
+                    {activeProject?.id === project.id ? <span>{t("projects.activeProject")}</span> : null}
+                  </div>
+                </button>
+              </article>
+            );
+          })}
+        </div>
+        <BoardPreview projectId={activeProject?.id ?? null} />
+      </section>
+      <aside className="page-side">
+        <Panel>
+          <PanelTitle icon={<Pencil size={18} />} title={activeProject ? activeProject.name : t("projects.noActiveProject")} />
+          {activeProject ? (
+            <>
+              <form className="task-create-form" onSubmit={submitTask}>
+                <input
+                  value={taskDraft.title}
+                  onChange={(event) => setTaskDraft({ ...taskDraft, title: event.target.value })}
+                  placeholder={t("projects.taskTitlePlaceholder")}
+                />
+                <textarea
+                  value={taskDraft.description}
+                  onChange={(event) => setTaskDraft({ ...taskDraft, description: event.target.value })}
+                  placeholder={t("projects.taskDescriptionPlaceholder")}
+                />
+                <Button type="submit">
+                  <Plus size={16} />
+                  {t("projects.addTask")}
+                </Button>
+              </form>
+              <div className="compact-list project-task-list">
+                {projectTasks.map((task) => (
+                  <button className="compact-row compact-button" key={task.id} type="button" onClick={() => selectTask(task.id)}>
+                    <span>{task.title}</span>
+                    <strong>{task.completed ? t("common.done") : task.priority?.toUpperCase() || t("today.open")}</strong>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="muted-copy">{t("projects.selectOrCreate")}</p>
+          )}
+        </Panel>
+      </aside>
+    </div>
   );
 }
 
-function BoardPreview() {
+function BoardPreview({ projectId }: { projectId: string | null }) {
   const { t } = useI18n();
+  const selectTask = useAppStore((state) => state.selectTask);
   const columns = [
     t("projects.columns.ideas"),
     t("projects.columns.backlog"),
@@ -308,7 +432,7 @@ function BoardPreview() {
     t("projects.columns.testing"),
     t("projects.columns.done")
   ];
-  const tasks = useAppStore((state) => state.tasks);
+  const tasks = useAppStore((state) => state.tasks).filter((task) => (projectId ? task.projectId === projectId : true));
 
   return (
     <div className="board-strip">
@@ -316,10 +440,10 @@ function BoardPreview() {
         <section className="kanban-column" key={column}>
           <h3>{column}</h3>
           {tasks.slice(index, index + 2).map((task) => (
-            <article className="kanban-card" key={`${column}-${task.id}`}>
+            <button className="kanban-card kanban-button" key={`${column}-${task.id}`} type="button" onClick={() => selectTask(task.id)}>
               <span>{task.title}</span>
               <Badge>{dynamicLabel(t, `taskTypes.${task.type}`, task.type)}</Badge>
-            </article>
+            </button>
           ))}
         </section>
       ))}
@@ -626,7 +750,7 @@ function SettingsView() {
       <section className="page-main">
         <PageHeader title={t("nav.settings")} meta={t("settings.meta")} />
         <LanguagePanel />
-        <AuthPanel />
+        <AccountPanel />
         <NoteSyncPanel />
       </section>
       <aside className="page-side">
@@ -668,67 +792,144 @@ function LanguagePanel() {
   );
 }
 
-function AuthPanel() {
+function AuthScreen() {
   const { t } = useI18n();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("demo@zada.local");
-  const [name, setName] = useState("Demo User");
-  const [password, setPassword] = useState("password123");
-  const [message, setMessage] = useState<AuthMessage>(
-    localStorage.getItem("zada.accessToken") ? { type: "signedInLocal" } : { type: "notSignedIn" }
-  );
+  const login = useAppStore((state) => state.login);
+  const register = useAppStore((state) => state.register);
+  const forgotPassword = useAppStore((state) => state.forgotPassword);
+  const resetPassword = useAppStore((state) => state.resetPassword);
+  const authError = useAppStore((state) => state.authError);
+  const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">("login");
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [message, setMessage] = useState("");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      const response = mode === "login" ? await api.login({ email, password }) : await api.register({ email, password, name });
-      localStorage.setItem("zada.accessToken", response.accessToken);
-      localStorage.setItem("zada.refreshToken", response.refreshToken);
-      setMessage({ type: "signedInAs", email: response.user.email });
+      if (mode === "login") {
+        await login({ email, password });
+        return;
+      }
+
+      if (mode === "register") {
+        await register({ email, password, name });
+        return;
+      }
+
+      if (mode === "forgot") {
+        const token = await forgotPassword(email);
+        if (token) {
+          setResetToken(token);
+          setMode("reset");
+          setMessage(t("auth.resetTokenReady"));
+        } else {
+          setMessage(t("auth.resetEmailSent"));
+        }
+        return;
+      }
+
+      await resetPassword({ email, resetToken, password });
+      setMode("login");
+      setPassword("");
+      setResetToken("");
+      setMessage(t("auth.passwordResetDone"));
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : "";
-      setMessage(messageText.toLowerCase().includes("invalid") ? { type: "invalidCredentials" } : { type: "authFailed" });
+      setMessage(error instanceof Error ? error.message : t("settings.authFailed"));
     }
   }
 
   return (
-    <Panel>
-      <PanelTitle icon={<Settings size={18} />} title={t("settings.account")} />
-      <form className="auth-form" onSubmit={submit}>
-        <div className="segmented">
-          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-            {t("settings.login")}
-          </button>
-          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
-            {t("settings.register")}
-          </button>
+    <div className="auth-shell">
+      <section className="auth-card">
+        <div className="brand-row">
+          <div className="brand-mark">Z</div>
+          <div>
+            <div className="brand-name">{t("common.appName")}</div>
+            <div className="brand-meta">{t("auth.sessionRequired")}</div>
+          </div>
         </div>
-        {mode === "register" ? (
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("settings.name")} />
-        ) : null}
-        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("settings.email")} type="email" />
-        <input
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder={t("settings.password")}
-          type="password"
-        />
-        <div className="toolbar">
-          <Button type="submit">{mode === "login" ? t("settings.login") : t("settings.register")}</Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              localStorage.removeItem("zada.accessToken");
-              localStorage.removeItem("zada.refreshToken");
-              setMessage({ type: "signedOut" });
-            }}
-          >
-            {t("settings.logout")}
+        <form className="auth-form" onSubmit={submit}>
+          <div className="segmented auth-segmented">
+            <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+              {t("settings.login")}
+            </button>
+            <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
+              {t("settings.register")}
+            </button>
+            <button type="button" className={mode === "forgot" || mode === "reset" ? "active" : ""} onClick={() => setMode("forgot")}>
+              {t("auth.recovery")}
+            </button>
+          </div>
+          <h1>
+            {mode === "register"
+              ? t("auth.createAccount")
+              : mode === "forgot"
+                ? t("auth.recoverPassword")
+                : mode === "reset"
+                  ? t("auth.resetPassword")
+                  : t("auth.loginTitle")}
+          </h1>
+          {mode === "register" ? (
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("settings.name")} />
+          ) : null}
+          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("settings.email")} type="email" />
+          {mode === "reset" ? (
+            <input value={resetToken} onChange={(event) => setResetToken(event.target.value)} placeholder={t("auth.resetToken")} />
+          ) : null}
+          {mode !== "forgot" ? (
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={t("settings.password")}
+              type="password"
+            />
+          ) : null}
+          <Button type="submit">
+            <KeyRound size={16} />
+            {mode === "register"
+              ? t("settings.register")
+              : mode === "forgot"
+                ? t("auth.sendReset")
+                : mode === "reset"
+                  ? t("auth.resetPassword")
+                  : t("settings.login")}
           </Button>
+          {resetToken && mode === "reset" ? (
+            <span className="form-message">
+              {t("auth.devResetToken")}: <code>{resetToken}</code>
+            </span>
+          ) : null}
+          {message || authError ? <span className="form-message">{message || authError}</span> : null}
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function AccountPanel() {
+  const { t } = useI18n();
+  const currentUser = useAppStore((state) => state.currentUser);
+  const logout = useAppStore((state) => state.logout);
+
+  return (
+    <Panel>
+      <PanelTitle icon={<User size={18} />} title={t("settings.account")} />
+      <div className="settings-row profile-row">
+        <div>
+          <strong>{currentUser?.name || currentUser?.email || t("settings.notSignedIn")}</strong>
+          <span>{currentUser?.email ?? t("settings.notSignedIn")}</span>
         </div>
-        <span className="form-message">{authMessageLabel(t, message)}</span>
-      </form>
+        <Badge tone="success">{currentUser?.role ?? "user"}</Badge>
+      </div>
+      <div className="toolbar">
+        <Button type="button" variant="secondary" onClick={logout}>
+          <LogOut size={16} />
+          {t("settings.logout")}
+        </Button>
+      </div>
     </Panel>
   );
 }
@@ -855,6 +1056,147 @@ function CodePreview() {
   );
 }
 
+function TaskDetailModal() {
+  const { t } = useI18n();
+  const selectedTaskId = useAppStore((state) => state.selectedTaskId);
+  const task = useAppStore((state) => state.tasks.find((candidate) => candidate.id === selectedTaskId));
+  const projects = useAppStore((state) => state.projects);
+  const selectTask = useAppStore((state) => state.selectTask);
+  const updateTask = useAppStore((state) => state.updateTask);
+  const deleteTask = useAppStore((state) => state.deleteTask);
+  const completeTask = useAppStore((state) => state.completeTask);
+  const uncompleteTask = useAppStore((state) => state.uncompleteTask);
+  const [draft, setDraft] = useState({
+    title: "",
+    description: "",
+    projectId: "",
+    type: "feature",
+    priority: "",
+    dueDate: "",
+    tags: ""
+  });
+
+  useEffect(() => {
+    if (!task) {
+      return;
+    }
+
+    setDraft({
+      title: task.title,
+      description: task.description ?? "",
+      projectId: task.projectId ?? "",
+      type: task.type,
+      priority: task.priority ?? "",
+      dueDate: task.dueDate ?? "",
+      tags: task.tags.join(", ")
+    });
+  }, [task]);
+
+  if (!task) {
+    return null;
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await updateTask(task.id, {
+      title: draft.title,
+      description: draft.description,
+      projectId: draft.projectId || null,
+      type: draft.type,
+      priority: draft.priority || null,
+      dueDate: draft.dueDate || null,
+      tags: draft.tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    });
+  }
+
+  async function remove() {
+    await deleteTask(task.id);
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("taskDetail.title")}>
+      <form className="task-detail-modal" onSubmit={submit}>
+        <div className="modal-head">
+          <div>
+            <h2>{t("taskDetail.title")}</h2>
+            <span>{task.updatedAt.slice(0, 10)}</span>
+          </div>
+          <button className="icon-button small" type="button" title={t("common.close")} onClick={() => selectTask(null)}>
+            <X size={16} />
+          </button>
+        </div>
+        <label>
+          <span>{t("taskDetail.taskTitle")}</span>
+          <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+        </label>
+        <label>
+          <span>{t("taskDetail.description")}</span>
+          <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+        </label>
+        <div className="form-grid">
+          <label>
+            <span>{t("taskDetail.project")}</span>
+            <select value={draft.projectId} onChange={(event) => setDraft({ ...draft, projectId: event.target.value })}>
+              <option value="">{t("taskDetail.noProject")}</option>
+              {projects.map((project) => (
+                <option value={project.id} key={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{t("taskDetail.type")}</span>
+            <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value })}>
+              {["feature", "bug", "design", "code", "testing", "build"].map((type) => (
+                <option value={type} key={type}>
+                  {dynamicLabel(t, `taskTypes.${type}`, type)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{t("taskDetail.priority")}</span>
+            <select value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: event.target.value })}>
+              <option value="">{t("taskDetail.noPriority")}</option>
+              {["p1", "p2", "p3"].map((priority) => (
+                <option value={priority} key={priority}>
+                  {priority.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{t("taskDetail.dueDate")}</span>
+            <input type="date" value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} />
+          </label>
+        </div>
+        <label>
+          <span>{t("taskDetail.tags")}</span>
+          <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} />
+        </label>
+        <div className="toolbar modal-actions">
+          <Button type="submit">
+            <Pencil size={16} />
+            {t("common.save")}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => (task.completed ? uncompleteTask(task.id) : completeTask(task.id))}>
+            <Check size={16} />
+            {task.completed ? t("taskDetail.reopen") : t("taskDetail.complete")}
+          </Button>
+          <Button type="button" variant="danger" onClick={remove}>
+            <Trash2 size={16} />
+            {t("common.delete")}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function MobileNav({ activeView, setActiveView }: { activeView: ViewId; setActiveView: (view: ViewId) => void }) {
   const { t } = useI18n();
   const mobileItems = navItems.filter((item) => ["today", "projects", "calendar", "habits"].includes(item.id));
@@ -915,31 +1257,6 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <strong>{value}</strong>
     </div>
   );
-}
-
-type AuthMessage =
-  | { type: "signedInLocal" }
-  | { type: "notSignedIn" }
-  | { type: "signedInAs"; email: string }
-  | { type: "signedOut" }
-  | { type: "authFailed" }
-  | { type: "invalidCredentials" };
-
-function authMessageLabel(t: TFunction, message: AuthMessage): string {
-  switch (message.type) {
-    case "signedInLocal":
-      return t("settings.signedInLocally");
-    case "signedInAs":
-      return t("settings.signedInAs", { email: message.email });
-    case "signedOut":
-      return t("settings.signedOutLocally");
-    case "authFailed":
-      return t("settings.authFailed");
-    case "invalidCredentials":
-      return t("settings.invalidCredentials");
-    default:
-      return t("settings.notSignedIn");
-  }
 }
 
 function noteStatusLabel(t: TFunction, status: string): string {

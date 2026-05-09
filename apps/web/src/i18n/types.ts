@@ -8,9 +8,11 @@ export interface TranslationDictionary {
     add: string;
     active: string;
     cancel: string;
+    close: string;
     confirm: string;
     copyCode: string;
     create: string;
+    delete: string;
     done: string;
     enabled: string;
     error: string;
@@ -51,6 +53,21 @@ export interface TranslationDictionary {
     toggleTheme: string;
     addTask: string;
   };
+  auth: {
+    loadingSession: string;
+    sessionRequired: string;
+    loginTitle: string;
+    createAccount: string;
+    recoverPassword: string;
+    recovery: string;
+    resetPassword: string;
+    resetToken: string;
+    sendReset: string;
+    resetTokenReady: string;
+    resetEmailSent: string;
+    passwordResetDone: string;
+    devResetToken: string;
+  };
   today: {
     metaOpenTasks: string;
     quickAddPlaceholder: string;
@@ -66,6 +83,17 @@ export interface TranslationDictionary {
     gameProject: string;
     bugTracker: string;
     linkedTasks: string;
+    namePlaceholder: string;
+    descriptionPlaceholder: string;
+    createProject: string;
+    empty: string;
+    noDescription: string;
+    activeProject: string;
+    noActiveProject: string;
+    selectOrCreate: string;
+    taskTitlePlaceholder: string;
+    taskDescriptionPlaceholder: string;
+    addTask: string;
     columns: {
       ideas: string;
       backlog: string;
@@ -166,6 +194,20 @@ export interface TranslationDictionary {
     name: string;
     email: string;
     password: string;
+  };
+  taskDetail: {
+    title: string;
+    taskTitle: string;
+    description: string;
+    project: string;
+    noProject: string;
+    type: string;
+    priority: string;
+    noPriority: string;
+    dueDate: string;
+    tags: string;
+    complete: string;
+    reopen: string;
   };
   subscription: {
     plan: string;

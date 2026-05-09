@@ -165,6 +165,12 @@ button {
 .quick-add input,
 .note-editor input,
 .note-editor textarea,
+.project-form input,
+.task-create-form input,
+.task-create-form textarea,
+.task-detail-modal input,
+.task-detail-modal textarea,
+.task-detail-modal select,
 .import-editor {
   width: 100%;
   border: 0;
@@ -475,6 +481,26 @@ section {
   padding: 16px;
 }
 
+.project-card.active {
+  border-color: var(--primary);
+}
+
+.project-card-button,
+.kanban-button,
+.compact-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.project-card-button {
+  display: grid;
+  gap: 0;
+  padding: 0;
+}
+
 .project-swatch {
   width: 36px;
   height: 6px;
@@ -538,6 +564,11 @@ section {
   margin-bottom: 8px;
 }
 
+.kanban-button:hover,
+.compact-button:hover {
+  border-color: var(--primary);
+}
+
 .calendar-layout,
 .game-layout {
   display: grid;
@@ -580,6 +611,42 @@ section {
   margin-bottom: 16px;
 }
 
+.project-form,
+.task-create-form {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.project-form {
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 2fr) auto;
+  align-items: center;
+}
+
+.project-form input,
+.task-create-form input,
+.task-create-form textarea,
+.task-detail-modal input,
+.task-detail-modal textarea,
+.task-detail-modal select {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 10px;
+}
+
+.task-create-form textarea,
+.task-detail-modal textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
 .auth-form {
   display: grid;
   gap: 10px;
@@ -592,6 +659,34 @@ section {
   background: var(--surface);
   color: var(--text);
   padding: 0 10px;
+}
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 22px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+}
+
+.auth-card h1 {
+  margin: 4px 0 6px;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.auth-segmented {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .segmented {
@@ -620,6 +715,16 @@ section {
 .form-message {
   color: var(--muted);
   font-size: 13px;
+}
+
+.profile-row {
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.muted-copy {
+  color: var(--muted);
+  margin: 0;
 }
 
 .note-editor input,
@@ -757,6 +862,62 @@ section {
   font-size: 13px;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.task-detail-modal {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 36px));
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 18px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-head span,
+.task-detail-modal label span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.task-detail-modal label {
+  display: grid;
+  gap: 6px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+}
+
 .switch {
   position: relative;
   display: inline-flex;
@@ -870,6 +1031,11 @@ section {
   .quick-add {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .project-form,
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 
   .mobile-nav {
