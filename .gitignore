@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.local
+.env.*.local
+apps/api/prisma/dev.db
+apps/api/prisma/migrations/
+apps/web/.vite/
+apps/desktop/release/
+apps/mobile/android/
+apps/mobile/ios/
+*.log

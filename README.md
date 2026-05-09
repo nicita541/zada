@@ -1,81 +1,72 @@
-# Задачник
+# Zada
 
-Desktop/PWA задачник с локальной офлайн-БД, backend API, Postgres и серверным worker для напоминаний.
+Zada — это offline-first рабочее пространство для продуктивности: задач, проектов, заметок, привычек, фокус-сессий и планирования разработки игр. Этот репозиторий теперь структурирован как monorepo, чтобы web, API, desktop, mobile и shared packages могли развиваться вместе. 
 
-## Локальный запуск backend
+## Структура workspace
 
-1. Установите Docker Desktop.
-2. Запустите `start-local.bat`.
-3. Backend будет доступен на `http://localhost:3000`.
-
-Сервисы:
-
-- API: `http://localhost:3000/health`
-- Postgres: `localhost:5432`
-
-Опциональный web preview:
-
-```powershell
-docker compose --profile web up --build
+```txt
+apps/
+  web/       React + Vite app, PWA shell, локальные данные в IndexedDB
+  api/       Express + TypeScript API, Prisma schema, auth, sync, billing gates
+  desktop/   Electron wrapper для web build и безопасный bridge для локальных файлов
+  mobile/    Capacitor shell для Android-first mobile packaging
+packages/
+  shared/    Domain types, parsers, premium gates, sync helpers
+  api-client Typed browser API client
+  ui/        Небольшие общие UI primitives
 ```
 
-Тогда web preview будет на `http://localhost:8080`.
+## Локальная разработка
 
-## ПК-приложение
-
-Desktop app находится в `desktop/`.
-
-Разработка:
+1. Установите зависимости:
 
 ```powershell
-cd E:\Задачник\desktop
 npm install
-npm start
 ```
 
-Сборка установщика:
+2. Скопируйте значения окружения по умолчанию и обновите секреты:
 
 ```powershell
-cd E:\Задачник\desktop
-npm install
-npm run dist
+Copy-Item .env.example .env
 ```
 
-Готовый установщик появится в `desktop\release`. Приложение устанавливается отдельно от Docker и подключается к `http://localhost:3000/api`.
-
-## Напоминания
-
-В desktop app напоминания показываются как нативные уведомления Windows: приложение опрашивает backend и подтверждает показ уведомления. Web/mobile push требует HTTPS и настоящие VAPID-ключи.
-
-Сгенерировать ключи:
+3. Запустите Postgres:
 
 ```powershell
-docker compose run --rm api npm run vapid
+docker compose up -d postgres
 ```
 
-Потом вставьте `publicKey` и `privateKey` в `backend/.env.docker` локально или в production env на сервере.
+4. Сгенерируйте Prisma client и выполните миграции:
 
-## Перенос на сервер
-
-1. Скопируйте проект на сервер.
-2. Настройте домен и HTTPS через nginx/Caddy/Traefik.
-3. Скопируйте `deploy/server.env.example` в production env и замените пароли, домен, VAPID-ключи.
-4. Поднимите контейнеры:
-
-```bash
-docker compose up -d --build
+```powershell
+npm run prisma:generate
+npm run prisma:migrate
 ```
 
-Для полноценного push на телефонах приложение должно открываться по HTTPS-домену. После этого установите его на телефон/ПК из браузера, включите уведомления в настройках приложения, и backend worker будет отправлять напоминания.
+5. Запустите API и web app в отдельных терминалах:
 
-## Что хранится в Postgres
+```powershell
+npm run dev:api
+npm run dev:web
+```
 
-- полный snapshot приложения;
-- нормализованные задачи, списки, теги, привычки, countdown;
-- история действий;
-- push-подписки;
-- события напоминаний и лог отправки.
+URL по умолчанию:
 
-## Офлайн-режим
+* Web: `http://localhost:5173`
+* API: `http://localhost:3000/api`
+* Health: `http://localhost:3000/health`
 
-Если backend недоступен, приложение продолжает работать через IndexedDB. Когда API снова доступен, состояние синхронизируется в Postgres.
+## Реализованный фундамент
+
+* Общий парсер outline задач для нумерованных задач, bullet-списков, checkboxes, tags, priority, dates, repeat/reminder metadata, task types и parent-child relations.
+* Общий парсер внутренних ссылок для `[[Task: ...]]`, `[[GDD: ...]]`, snippets, bugs, milestones, notes, concepts и files.
+* Общий каталог premium features и offline entitlement rules.
+* Общая модель статуса синхронизации заметок для состояний local-only, pending, synced и error.
+* Skeleton API routes для auth, core projects/tasks, sync, import preview/confirm, billing status, unavailable checkout и manual admin subscription/entitlement grants.
+* React app shell с desktop sidebar, mobile bottom navigation, quick add, task list, import preview, notes sync controls, game dev dashboard, subscription screen, focus, stats и settings.
+* Безопасный Electron preload bridge для ссылок на локальные файлы.
+* Capacitor mobile shell и PWA manifest/service worker.
+
+## Границы MVP
+
+Интеграция платёжного провайдера, team roles, public sharing, AI features, third-party calendar imports, S3 file storage, полноценный iOS release и встроенный Git client намеренно вынесены за рамки MVP.

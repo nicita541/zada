@@ -1,0 +1,410 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+  role         String   @default("user")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sessions      Session[]
+  workspaces    Workspace[]
+  subscriptions Subscription[]
+  entitlements  PremiumEntitlement[]
+  settings      UserSettings?
+
+  @@map("users")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Workspace {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects Project[]
+
+  @@index([userId])
+  @@map("workspaces")
+}
+
+model Project {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  name         String
+  description  String?
+  color        String?
+  type         String    @default("standard")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  columns   BoardColumn[]
+  tasks     Task[]
+  notes     Note[]
+  refs      Reference[]
+  snippets  CodeSnippet[]
+  milestones Milestone[]
+
+  @@index([userId, workspaceId])
+  @@map("projects")
+}
+
+model BoardColumn {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  projectId    String    @map("project_id") @db.Uuid
+  name         String
+  position     Int
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@index([userId, workspaceId, projectId])
+  @@map("board_columns")
+}
+
+model Task {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  projectId    String?   @map("project_id") @db.Uuid
+  columnId     String?   @map("column_id") @db.Uuid
+  parentId     String?   @map("parent_id") @db.Uuid
+  title        String
+  description  String?
+  status       String    @default("todo")
+  type         String    @default("feature")
+  priority     String?
+  dueDate      DateTime? @map("due_date")
+  startDate    DateTime? @map("start_date")
+  time         String?
+  repeat       String?
+  remindAt     DateTime? @map("remind_at")
+  position     Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  column    BoardColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  parent    Task?        @relation("TaskChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Task[]       @relation("TaskChildren")
+  taskTags  TaskTag[]
+  subtasks  Subtask[]
+  reminders Reminder[]
+
+  @@index([userId, workspaceId])
+  @@index([projectId])
+  @@map("tasks")
+}
+
+model Tag {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  color       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  taskTags TaskTag[]
+
+  @@unique([userId, workspaceId, name])
+  @@map("tags")
+}
+
+model TaskTag {
+  taskId String @map("task_id") @db.Uuid
+  tagId  String @map("tag_id") @db.Uuid
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@map("task_tags")
+}
+
+model Subtask {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  taskId       String    @map("task_id") @db.Uuid
+  title        String
+  completed    Boolean   @default(false)
+  position     Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId, taskId])
+  @@map("subtasks")
+}
+
+model Reminder {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  taskId       String?   @map("task_id") @db.Uuid
+  remindAt     DateTime  @map("remind_at")
+  deliveredAt  DateTime? @map("delivered_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId])
+  @@map("reminders")
+}
+
+model Habit {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  title        String
+  schedule     String
+  color        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  logs HabitLog[]
+
+  @@index([userId, workspaceId])
+  @@map("habits")
+}
+
+model HabitLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  habitId      String   @map("habit_id") @db.Uuid
+  loggedFor    DateTime @map("logged_for")
+  value        Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  syncRevision Int      @default(0) @map("sync_revision")
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, loggedFor])
+  @@map("habit_logs")
+}
+
+model Note {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  projectId    String?   @map("project_id") @db.Uuid
+  title        String
+  content      String
+  tags         String[]  @default([])
+  syncStatus   String    @default("pending") @map("sync_status")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, workspaceId])
+  @@map("notes")
+}
+
+model Reference {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  projectId    String?   @map("project_id") @db.Uuid
+  title        String
+  url          String?
+  localPath    String?   @map("local_path")
+  kind         String
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, workspaceId])
+  @@map("references")
+}
+
+model CodeSnippet {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  projectId    String?   @map("project_id") @db.Uuid
+  title        String
+  description  String?
+  language     String
+  code         String
+  tags         String[]  @default([])
+  linkedTaskId String?   @map("linked_task_id") @db.Uuid
+  linkedNoteId String?   @map("linked_note_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, workspaceId])
+  @@map("code_snippets")
+}
+
+model Milestone {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  projectId    String?   @map("project_id") @db.Uuid
+  name         String
+  status       String    @default("planned")
+  progress     Int       @default(0)
+  dueDate      DateTime? @map("due_date")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, workspaceId])
+  @@map("milestones")
+}
+
+model FocusSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  taskId       String?   @map("task_id") @db.Uuid
+  startedAt    DateTime  @map("started_at")
+  endedAt      DateTime? @map("ended_at")
+  minutes      Int
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  syncRevision Int       @default(0) @map("sync_revision")
+
+  @@index([userId, workspaceId])
+  @@map("focus_sessions")
+}
+
+model SyncChangeLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  workspaceId String?  @map("workspace_id") @db.Uuid
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  operation   String
+  revision    Int      @default(autoincrement())
+  payload     Json
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, revision])
+  @@map("sync_change_log")
+}
+
+model Device {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  name           String
+  platform       String
+  lastSeenAt     DateTime @default(now()) @map("last_seen_at")
+  lastRevision   Int      @default(0) @map("last_revision")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("devices")
+}
+
+model UserSettings {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @unique @map("user_id") @db.Uuid
+  workspaceId      String?  @map("workspace_id") @db.Uuid
+  theme            String   @default("system")
+  notesSyncEnabled Boolean  @default(true) @map("notes_sync_enabled")
+  locale           String   @default("en")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model Subscription {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  plan             String    @default("free")
+  status           String    @default("inactive")
+  source           String    @default("manual")
+  currentPeriodEnd DateTime? @map("current_period_end")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model PremiumEntitlement {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  feature   String
+  grantedBy String?   @map("granted_by") @db.Uuid
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature])
+  @@map("premium_entitlements")
+}

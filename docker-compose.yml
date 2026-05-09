@@ -1,48 +1,34 @@
-name: taskbook
-
 services:
-  db:
+  postgres:
     image: postgres:16-alpine
-    restart: unless-stopped
     environment:
-      POSTGRES_DB: taskbook
-      POSTGRES_USER: taskbook
-      POSTGRES_PASSWORD: taskbook_password
-      TZ: Asia/Novosibirsk
-    volumes:
-      - taskbook_postgres:/var/lib/postgresql/data
-      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+      POSTGRES_DB: zada
+      POSTGRES_USER: zada
+      POSTGRES_PASSWORD: zada
     ports:
       - "5432:5432"
+    volumes:
+      - zada-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taskbook -d taskbook"]
+      test: ["CMD-SHELL", "pg_isready -U zada -d zada"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 10
 
   api:
     build:
-      context: ./backend
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+      context: .
+      dockerfile: apps/api/Dockerfile
     env_file:
-      - ./backend/.env.docker
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql://zada:zada@postgres:5432/zada?schema=public
+      WEB_ORIGIN: http://localhost:5173
     ports:
       - "3000:3000"
-
-  app:
-    profiles:
-      - web
-    build:
-      context: .
-      dockerfile: deploy/app.Dockerfile
-    restart: unless-stopped
     depends_on:
-      - api
-    ports:
-      - "8080:80"
+      postgres:
+        condition: service_healthy
 
 volumes:
-  taskbook_postgres:
+  zada-postgres:

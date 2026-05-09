@@ -1,0 +1,31 @@
+{
+  "name": "zada",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Offline-first productivity and game development planning workspace.",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @zada/web",
+    "dev:web": "npm run dev --workspace @zada/web",
+    "dev:api": "npm run dev --workspace @zada/api",
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "lint": "eslint . --ext .ts,.tsx",
+    "prisma:generate": "npm run prisma:generate --workspace @zada/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace @zada/api"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@typescript-eslint/eslint-plugin": "^7.9.0",
+    "@typescript-eslint/parser": "^7.9.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}

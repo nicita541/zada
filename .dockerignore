@@ -1,7 +1,0 @@
-backend/node_modules
-node_modules
-.git
-.chrome-profile-desktop
-.chrome-profile-mobile
-preview*.png
-*.log
