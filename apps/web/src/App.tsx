@@ -36,19 +36,22 @@ import { Badge, Button, Panel } from "@zada/ui";
 import { canUseFeatureOffline, gameDevTemplate, parseInternalLinks, premiumFeatures } from "@zada/shared";
 import { useAppStore, type ViewId } from "./store/appStore";
 import { api } from "./lib/api";
+import { I18nProvider, useI18n, type Locale, type TranslationKey } from "./i18n";
 
-const navItems: Array<{ id: ViewId; label: string; icon: ReactNode }> = [
-  { id: "today", label: "Today", icon: <ClipboardList size={18} /> },
-  { id: "projects", label: "Projects", icon: <Columns3 size={18} /> },
-  { id: "calendar", label: "Calendar", icon: <CalendarDays size={18} /> },
-  { id: "habits", label: "Habits", icon: <Flame size={18} /> },
-  { id: "notes", label: "Notes", icon: <NotebookText size={18} /> },
-  { id: "import", label: "Import", icon: <Import size={18} /> },
-  { id: "game-dev", label: "Game Dev", icon: <FileCode2 size={18} /> },
-  { id: "focus", label: "Focus", icon: <Timer size={18} /> },
-  { id: "stats", label: "Stats", icon: <Gauge size={18} /> },
-  { id: "settings", label: "Settings", icon: <Settings size={18} /> }
+const navItems: Array<{ id: ViewId; labelKey: TranslationKey; icon: ReactNode }> = [
+  { id: "today", labelKey: "nav.today", icon: <ClipboardList size={18} /> },
+  { id: "projects", labelKey: "nav.projects", icon: <Columns3 size={18} /> },
+  { id: "calendar", labelKey: "nav.calendar", icon: <CalendarDays size={18} /> },
+  { id: "habits", labelKey: "nav.habits", icon: <Flame size={18} /> },
+  { id: "notes", labelKey: "nav.notes", icon: <NotebookText size={18} /> },
+  { id: "import", labelKey: "nav.import", icon: <Import size={18} /> },
+  { id: "game-dev", labelKey: "nav.gameDev", icon: <FileCode2 size={18} /> },
+  { id: "focus", labelKey: "nav.focus", icon: <Timer size={18} /> },
+  { id: "stats", labelKey: "nav.stats", icon: <Gauge size={18} /> },
+  { id: "settings", labelKey: "nav.settings", icon: <Settings size={18} /> }
 ];
+
+type TFunction = ReturnType<typeof useI18n>["t"];
 
 export default function App() {
   const hydrate = useAppStore((state) => state.hydrate);
@@ -58,13 +61,16 @@ export default function App() {
   }, [hydrate]);
 
   return (
-    <div className="app-root">
-      <AppShell />
-    </div>
+    <I18nProvider>
+      <div className="app-root">
+        <AppShell />
+      </div>
+    </I18nProvider>
   );
 }
 
 function AppShell() {
+  const { t } = useI18n();
   const activeView = useAppStore((state) => state.activeView);
   const setActiveView = useAppStore((state) => state.setActiveView);
   const syncState = useAppStore((state) => state.syncState);
@@ -81,22 +87,25 @@ function AppShell() {
         <div className="brand-row">
           <div className="brand-mark">Z</div>
           <div>
-            <div className="brand-name">Zada</div>
-            <div className="brand-meta">Personal workspace</div>
+            <div className="brand-name">{t("common.appName")}</div>
+            <div className="brand-meta">{t("shell.personalWorkspace")}</div>
           </div>
         </div>
-        <nav className="sidebar-nav" aria-label="Main">
-          {navItems.map((item) => (
-            <button
-              className={`nav-button ${activeView === item.id ? "active" : ""}`}
-              key={item.id}
-              onClick={() => setActiveView(item.id)}
-              title={item.label}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          ))}
+        <nav className="sidebar-nav" aria-label={t("shell.mainNavigation")}>
+          {navItems.map((item) => {
+            const label = t(item.labelKey);
+            return (
+              <button
+                className={`nav-button ${activeView === item.id ? "active" : ""}`}
+                key={item.id}
+                onClick={() => setActiveView(item.id)}
+                title={label}
+              >
+                {item.icon}
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </nav>
       </aside>
 
@@ -104,20 +113,20 @@ function AppShell() {
         <header className="topbar">
           <div className="search-box">
             <Search size={18} />
-            <input placeholder="Search tasks, notes, snippets" />
+            <input placeholder={t("common.searchPlaceholder")} />
           </div>
           <div className="topbar-actions">
             <SyncIndicator state={syncState} />
-            <button className="icon-button" title="Sync now" onClick={manualSync}>
+            <button className="icon-button" title={t("common.syncNow")} onClick={manualSync}>
               <RefreshCw size={18} />
             </button>
-            <button className="icon-button" title="Notifications">
+            <button className="icon-button notification-button" title={t("shell.notifications")}>
               <Bell size={18} />
             </button>
-            <button className="icon-button" title="Subscription" onClick={() => setActiveView("subscription")}>
+            <button className="icon-button" title={t("nav.subscription")} onClick={() => setActiveView("subscription")}>
               <Sparkles size={18} />
             </button>
-            <button className="icon-button" title="Toggle theme" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+            <button className="icon-button" title={t("shell.toggleTheme")} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
               {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
             </button>
           </div>
@@ -129,7 +138,7 @@ function AppShell() {
       </main>
 
       <MobileNav activeView={activeView} setActiveView={setActiveView} />
-      <button className="fab" title="Add task" onClick={() => setActiveView("today")}>
+      <button className="fab" title={t("shell.addTask")} onClick={() => setActiveView("today")}>
         <Plus size={22} />
       </button>
     </div>
@@ -164,6 +173,7 @@ function ViewRenderer({ view }: { view: ViewId }) {
 }
 
 function TodayView() {
+  const { t } = useI18n();
   const tasks = useAppStore((state) => state.tasks);
   const toggleTask = useAppStore((state) => state.toggleTask);
   const completedCount = tasks.filter((task) => task.completed).length;
@@ -172,18 +182,20 @@ function TodayView() {
   return (
     <div className="page-grid">
       <section className="page-main">
-        <PageHeader title="Today" meta={`${openTasks.length} open tasks`} />
+        <PageHeader title={t("nav.today")} meta={t("today.metaOpenTasks", { count: openTasks.length })} />
         <QuickAdd />
         <div className="task-list">
           {tasks.map((task) => (
             <article className={`task-row ${task.completed ? "done" : ""}`} key={task.id}>
-              <button className="check-button" title="Toggle complete" onClick={() => toggleTask(task.id)}>
+              <button className="check-button" title={t("today.toggleComplete")} onClick={() => toggleTask(task.id)}>
                 {task.completed ? <Check size={15} /> : null}
               </button>
               <div className="task-body">
                 <div className="task-title-row">
                   <h3>{task.title}</h3>
-                  <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>{task.type}</Badge>
+                  <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
+                    {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
+                  </Badge>
                 </div>
                 {task.description ? <p>{task.description}</p> : null}
                 <div className="task-meta">
@@ -194,7 +206,7 @@ function TodayView() {
                   ))}
                 </div>
               </div>
-              <button className="icon-button small" title="Open task">
+              <button className="icon-button small" title={t("today.openTask")}>
                 <ChevronRight size={16} />
               </button>
             </article>
@@ -204,16 +216,16 @@ function TodayView() {
 
       <aside className="page-side">
         <Panel>
-          <PanelTitle icon={<Gauge size={18} />} title="Daily Load" />
+          <PanelTitle icon={<Gauge size={18} />} title={t("today.dailyLoad")} />
           <div className="metric-grid">
-            <Metric label="Open" value={openTasks.length} />
-            <Metric label="Done" value={completedCount} />
-            <Metric label="Focus" value="50m" />
-            <Metric label="Sync" value="Local" />
+            <Metric label={t("today.open")} value={openTasks.length} />
+            <Metric label={t("common.done")} value={completedCount} />
+            <Metric label={t("nav.focus")} value="50m" />
+            <Metric label={t("common.sync")} value={t("common.local")} />
           </div>
         </Panel>
         <Panel>
-          <PanelTitle icon={<CalendarDays size={18} />} title="Upcoming" />
+          <PanelTitle icon={<CalendarDays size={18} />} title={t("today.upcoming")} />
           <div className="compact-list">
             {tasks
               .filter((task) => task.dueDate)
@@ -232,6 +244,7 @@ function TodayView() {
 }
 
 function QuickAdd() {
+  const { t } = useI18n();
   const quickAdd = useAppStore((state) => state.quickAdd);
   const [value, setValue] = useState("");
 
@@ -244,39 +257,36 @@ function QuickAdd() {
   return (
     <form className="quick-add" onSubmit={submit}>
       <Plus size={18} />
-      <input
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Add task #tag p1 due:2026-05-10 [bug]"
-      />
-      <Button title="Add task" type="submit">
+      <input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t("today.quickAddPlaceholder")} />
+      <Button title={t("shell.addTask")} type="submit">
         <Zap size={16} />
-        Add
+        {t("common.add")}
       </Button>
     </form>
   );
 }
 
 function ProjectsView() {
+  const { t } = useI18n();
   const tasks = useAppStore((state) => state.tasks);
   const groups = useMemo(
     () => [
-      { title: "Inbox", count: tasks.length, color: "indigo" },
-      { title: "Game Development Project", count: tasks.filter((task) => task.tags.includes("gdd")).length, color: "green" },
-      { title: "Bug Tracker", count: tasks.filter((task) => task.type === "bug").length, color: "red" }
+      { title: t("projects.inbox"), count: tasks.length, color: "indigo" },
+      { title: t("projects.gameProject"), count: tasks.filter((task) => task.tags.includes("gdd")).length, color: "green" },
+      { title: t("projects.bugTracker"), count: tasks.filter((task) => task.type === "bug").length, color: "red" }
     ],
-    [tasks]
+    [tasks, t]
   );
 
   return (
     <section>
-      <PageHeader title="Projects" meta="Workspace overview" />
+      <PageHeader title={t("nav.projects")} meta={t("projects.meta")} />
       <div className="project-grid">
         {groups.map((project) => (
           <article className="project-card" key={project.title}>
             <div className={`project-swatch ${project.color}`} />
             <h3>{project.title}</h3>
-            <p>{project.count} linked tasks</p>
+            <p>{t("projects.linkedTasks", { count: project.count })}</p>
             <div className="progress-track">
               <span style={{ width: `${Math.min(project.count * 18, 100)}%` }} />
             </div>
@@ -289,7 +299,15 @@ function ProjectsView() {
 }
 
 function BoardPreview() {
-  const columns = ["Ideas", "Backlog", "Todo", "In Progress", "Testing", "Done"];
+  const { t } = useI18n();
+  const columns = [
+    t("projects.columns.ideas"),
+    t("projects.columns.backlog"),
+    t("projects.columns.todo"),
+    t("projects.columns.inProgress"),
+    t("projects.columns.testing"),
+    t("projects.columns.done")
+  ];
   const tasks = useAppStore((state) => state.tasks);
 
   return (
@@ -300,7 +318,7 @@ function BoardPreview() {
           {tasks.slice(index, index + 2).map((task) => (
             <article className="kanban-card" key={`${column}-${task.id}`}>
               <span>{task.title}</span>
-              <Badge>{task.type}</Badge>
+              <Badge>{dynamicLabel(t, `taskTypes.${task.type}`, task.type)}</Badge>
             </article>
           ))}
         </section>
@@ -310,13 +328,14 @@ function BoardPreview() {
 }
 
 function CalendarView() {
+  const { t } = useI18n();
   const tasks = useAppStore((state) => state.tasks).filter((task) => task.dueDate);
   return (
     <section>
-      <PageHeader title="Calendar" meta="Month, week, and agenda foundation" />
+      <PageHeader title={t("nav.calendar")} meta={t("calendar.meta")} />
       <div className="calendar-layout">
         <Panel>
-          <PanelTitle icon={<CalendarDays size={18} />} title="Agenda" />
+          <PanelTitle icon={<CalendarDays size={18} />} title={t("calendar.agenda")} />
           <div className="compact-list">
             {tasks.map((task) => (
               <div className="compact-row" key={task.id}>
@@ -330,8 +349,8 @@ function CalendarView() {
           {Array.from({ length: 35 }).map((_, index) => (
             <div className="calendar-cell" key={index}>
               <span>{index + 1}</span>
-              {index === 8 ? <small>Import preview</small> : null}
-              {index === 13 ? <small>Focus block</small> : null}
+              {index === 8 ? <small>{t("calendar.importPreview")}</small> : null}
+              {index === 13 ? <small>{t("calendar.focusBlock")}</small> : null}
             </div>
           ))}
         </div>
@@ -341,23 +360,24 @@ function CalendarView() {
 }
 
 function HabitsView() {
+  const { t } = useI18n();
   const habits = [
-    { title: "Daily planning", streak: 9, tone: "success" as const },
-    { title: "Prototype review", streak: 4, tone: "warning" as const },
-    { title: "Write design notes", streak: 12, tone: "info" as const }
+    { title: t("habits.dailyPlanning"), streak: 9, tone: "success" as const },
+    { title: t("habits.prototypeReview"), streak: 4, tone: "warning" as const },
+    { title: t("habits.writeDesignNotes"), streak: 12, tone: "info" as const }
   ];
 
   return (
     <section>
-      <PageHeader title="Habits" meta="Simple streak tracking" />
+      <PageHeader title={t("nav.habits")} meta={t("habits.meta")} />
       <div className="habit-grid">
         {habits.map((habit) => (
           <article className="habit-card" key={habit.title}>
             <div>
               <h3>{habit.title}</h3>
-              <p>{habit.streak} day streak</p>
+              <p>{t("habits.streak", { count: habit.streak })}</p>
             </div>
-            <Badge tone={habit.tone}>active</Badge>
+            <Badge tone={habit.tone}>{t("common.active")}</Badge>
           </article>
         ))}
       </div>
@@ -366,10 +386,11 @@ function HabitsView() {
 }
 
 function NotesView() {
+  const { t } = useI18n();
   const notes = useAppStore((state) => state.notes);
   const saveNote = useAppStore((state) => state.saveNote);
   const noteSettings = useAppStore((state) => state.noteSettings);
-  const [draft, setDraft] = useState({ title: "New Note", content: "", tags: "ideas" });
+  const [draft, setDraft] = useState({ title: t("notes.newTitle"), content: "", tags: "ideas" });
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -378,20 +399,32 @@ function NotesView() {
       content: draft.content,
       tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
     });
-    setDraft({ title: "New Note", content: "", tags: "ideas" });
+    setDraft({ title: t("notes.newTitle"), content: "", tags: "ideas" });
   }
 
   return (
     <div className="page-grid">
       <section className="page-main">
-        <PageHeader title="Notes" meta={noteSettings.notesEnabled ? "Sync enabled" : "Local-only"} />
+        <PageHeader title={t("nav.notes")} meta={noteSettings.notesEnabled ? t("notes.syncEnabled") : t("notes.localOnly")} />
         <form className="note-editor" onSubmit={submit}>
-          <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-          <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} />
-          <textarea value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} />
+          <input
+            value={draft.title}
+            onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+            placeholder={t("notes.titlePlaceholder")}
+          />
+          <input
+            value={draft.tags}
+            onChange={(event) => setDraft({ ...draft, tags: event.target.value })}
+            placeholder={t("notes.tagsPlaceholder")}
+          />
+          <textarea
+            value={draft.content}
+            onChange={(event) => setDraft({ ...draft, content: event.target.value })}
+            placeholder={t("notes.contentPlaceholder")}
+          />
           <Button type="submit">
             <FileText size={16} />
-            Save
+            {t("common.save")}
           </Button>
         </form>
         <div className="note-list">
@@ -400,7 +433,7 @@ function NotesView() {
               <div className="note-head">
                 <h3>{note.title}</h3>
                 <Badge tone={note.syncStatus === "local_only" ? "warning" : note.syncStatus === "error" ? "danger" : "success"}>
-                  {note.syncStatus.replace("_", " ")}
+                  {noteStatusLabel(t, note.syncStatus)}
                 </Badge>
               </div>
               <MarkdownPreview markdown={note.content} />
@@ -416,11 +449,11 @@ function NotesView() {
       <aside className="page-side">
         <NoteSyncPanel />
         <Panel>
-          <PanelTitle icon={<Link2 size={18} />} title="Internal Links" />
+          <PanelTitle icon={<Link2 size={18} />} title={t("notes.internalLinks")} />
           <div className="compact-list">
             {notes.flatMap((note) => parseInternalLinks(note.content)).map((link) => (
               <div className="compact-row" key={`${link.kind}-${link.target}`}>
-                <span>{link.kind}</span>
+                <span>{dynamicLabel(t, `linkKinds.${link.kind}`, link.kind)}</span>
                 <strong>{link.target}</strong>
               </div>
             ))}
@@ -432,6 +465,7 @@ function NotesView() {
 }
 
 function ImportView() {
+  const { t } = useI18n();
   const source = useAppStore((state) => state.importSource);
   const preview = useAppStore((state) => state.importPreview);
   const setImportSource = useAppStore((state) => state.setImportSource);
@@ -440,27 +474,27 @@ function ImportView() {
   return (
     <div className="page-grid">
       <section className="page-main">
-        <PageHeader title="Task Import" meta={preview.projectName ?? "Outline parser"} />
+        <PageHeader title={t("import.title")} meta={preview.projectName ?? t("import.outlineParser")} />
         <textarea className="import-editor" value={source} onChange={(event) => setImportSource(event.target.value)} />
         <div className="toolbar">
           <Button onClick={confirmImport} disabled={preview.errors.length > 0}>
             <Upload size={16} />
-            Confirm
+            {t("common.confirm")}
           </Button>
           <Button variant="secondary">
             <Download size={16} />
-            Export JSON
+            {t("common.exportJson")}
           </Button>
         </div>
       </section>
       <aside className="page-side">
         <Panel>
-          <PanelTitle icon={<Import size={18} />} title="Preview" />
+          <PanelTitle icon={<Import size={18} />} title={t("import.preview")} />
           <div className="metric-grid">
-            <Metric label="Tasks" value={preview.items.length} />
-            <Metric label="Warnings" value={preview.warnings.length} />
-            <Metric label="Errors" value={preview.errors.length} />
-            <Metric label="Project" value={preview.projectName ? "Yes" : "No"} />
+            <Metric label={t("import.tasks")} value={preview.items.length} />
+            <Metric label={t("import.warnings")} value={preview.warnings.length} />
+            <Metric label={t("import.errors")} value={preview.errors.length} />
+            <Metric label={t("import.project")} value={preview.projectName ? t("common.yes") : t("common.no")} />
           </div>
           <div className="tree-preview">
             {preview.tree.slice(0, 8).map((item) => (
@@ -477,6 +511,7 @@ function ImportView() {
 }
 
 function GameDevView() {
+  const { t } = useI18n();
   const createGameDevWorkspace = useAppStore((state) => state.createGameDevWorkspace);
   const setActiveView = useAppStore((state) => state.setActiveView);
   const subscription = useAppStore((state) => state.subscription);
@@ -484,33 +519,39 @@ function GameDevView() {
 
   return (
     <section>
-      <PageHeader title="Game Dev" meta={access.allowed ? "Workspace enabled" : "Premium gated"} />
+      <PageHeader title={t("nav.gameDev")} meta={access.allowed ? t("gameDev.workspaceEnabled") : t("gameDev.premiumGated")} />
       <div className="game-layout">
         <Panel>
-          <PanelTitle icon={<FileCode2 size={18} />} title="Project Template" />
+          <PanelTitle icon={<FileCode2 size={18} />} title={t("gameDev.projectTemplate")} />
           <div className="template-grid">
             {gameDevTemplate.defaultTaskGroups.map((group) => (
               <article className="template-item" key={group.title}>
-                <Badge>{group.type}</Badge>
-                <h3>{group.title}</h3>
-                <p>{group.tasks.length} starter tasks</p>
+                <Badge>{dynamicLabel(t, `taskTypes.${group.type}`, group.type)}</Badge>
+                <h3>{groupTitleLabel(t, group.title)}</h3>
+                <p>{t("gameDev.starterTasks", { count: group.tasks.length })}</p>
               </article>
             ))}
           </div>
-          {!access.allowed ? <div className="inline-alert">Game Dev Workspace is a premium feature.</div> : null}
-          <Button onClick={access.allowed ? createGameDevWorkspace : () => setActiveView("subscription")} disabled={!access.allowed}>
+          {!access.allowed ? <div className="inline-alert">{t("gameDev.premiumFeatureAlert")}</div> : null}
+          <Button onClick={access.allowed ? createGameDevWorkspace : () => setActiveView("subscription")}>
             <Plus size={16} />
-            {access.allowed ? "Create" : "Upgrade"}
+            {access.allowed ? t("common.create") : t("common.upgrade")}
           </Button>
         </Panel>
         <Panel>
-          <PanelTitle icon={<Code2 size={18} />} title="Snippets" />
+          <PanelTitle icon={<Code2 size={18} />} title={t("gameDev.snippets")} />
           <CodePreview />
         </Panel>
         <Panel>
-          <PanelTitle icon={<Archive size={18} />} title="Milestones" />
+          <PanelTitle icon={<Archive size={18} />} title={t("gameDev.milestones")} />
           <div className="milestone-list">
-            {["Prototype", "Vertical Slice", "Alpha", "Beta", "Release"].map((milestone, index) => (
+            {[
+              t("gameDev.milestonesList.prototype"),
+              t("gameDev.milestonesList.verticalSlice"),
+              t("gameDev.milestonesList.alpha"),
+              t("gameDev.milestonesList.beta"),
+              t("gameDev.milestonesList.release")
+            ].map((milestone, index) => (
               <div className="milestone-row" key={milestone}>
                 <span>{milestone}</span>
                 <div className="progress-track">
@@ -526,19 +567,20 @@ function GameDevView() {
 }
 
 function FocusView() {
+  const { t } = useI18n();
   return (
     <section>
-      <PageHeader title="Focus" meta="Pomodoro session" />
+      <PageHeader title={t("nav.focus")} meta={t("focus.meta")} />
       <div className="focus-shell">
         <div className="focus-timer">25:00</div>
         <div className="toolbar">
           <Button>
             <Play size={16} />
-            Start
+            {t("common.start")}
           </Button>
           <Button variant="secondary">
             <RefreshCw size={16} />
-            Reset
+            {t("common.reset")}
           </Button>
         </div>
       </div>
@@ -547,18 +589,19 @@ function FocusView() {
 }
 
 function StatsView() {
+  const { t } = useI18n();
   const tasks = useAppStore((state) => state.tasks);
   const data = [
-    { label: "Mon", tasks: 3 },
-    { label: "Tue", tasks: 6 },
-    { label: "Wed", tasks: 4 },
-    { label: "Thu", tasks: tasks.length },
-    { label: "Fri", tasks: 5 }
+    { label: t("stats.weekdays.mon"), tasks: 3 },
+    { label: t("stats.weekdays.tue"), tasks: 6 },
+    { label: t("stats.weekdays.wed"), tasks: 4 },
+    { label: t("stats.weekdays.thu"), tasks: tasks.length },
+    { label: t("stats.weekdays.fri"), tasks: 5 }
   ];
 
   return (
     <section>
-      <PageHeader title="Stats" meta="Task and focus trends" />
+      <PageHeader title={t("nav.stats")} meta={t("stats.meta")} />
       <Panel>
         <div className="chart-wrap">
           <ResponsiveContainer width="100%" height={280}>
@@ -577,10 +620,12 @@ function StatsView() {
 }
 
 function SettingsView() {
+  const { t } = useI18n();
   return (
     <div className="page-grid">
       <section className="page-main">
-        <PageHeader title="Settings" meta="Workspace preferences" />
+        <PageHeader title={t("nav.settings")} meta={t("settings.meta")} />
+        <LanguagePanel />
         <AuthPanel />
         <NoteSyncPanel />
       </section>
@@ -591,94 +636,136 @@ function SettingsView() {
   );
 }
 
+function LanguagePanel() {
+  const { locale, setLocale, t } = useI18n();
+  const options: Array<{ value: Locale; label: string }> = [
+    { value: "ru", label: t("settings.russian") },
+    { value: "en", label: t("settings.english") }
+  ];
+
+  return (
+    <Panel>
+      <PanelTitle icon={<Settings size={18} />} title={t("settings.interface")} />
+      <div className="settings-row language-row">
+        <div>
+          <strong>{t("settings.language")}</strong>
+          <span>{locale === "ru" ? t("settings.russian") : t("settings.english")}</span>
+        </div>
+        <div className="segmented language-segmented">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={locale === option.value ? "active" : ""}
+              onClick={() => setLocale(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 function AuthPanel() {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("demo@zada.local");
   const [name, setName] = useState("Demo User");
   const [password, setPassword] = useState("password123");
-  const [message, setMessage] = useState(localStorage.getItem("zada.accessToken") ? "Signed in locally" : "Not signed in");
+  const [message, setMessage] = useState<AuthMessage>(
+    localStorage.getItem("zada.accessToken") ? { type: "signedInLocal" } : { type: "notSignedIn" }
+  );
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      const response =
-        mode === "login"
-          ? await api.login({ email, password })
-          : await api.register({ email, password, name });
+      const response = mode === "login" ? await api.login({ email, password }) : await api.register({ email, password, name });
       localStorage.setItem("zada.accessToken", response.accessToken);
       localStorage.setItem("zada.refreshToken", response.refreshToken);
-      setMessage(`Signed in as ${response.user.email}`);
+      setMessage({ type: "signedInAs", email: response.user.email });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Authentication failed");
+      const messageText = error instanceof Error ? error.message : "";
+      setMessage(messageText.toLowerCase().includes("invalid") ? { type: "invalidCredentials" } : { type: "authFailed" });
     }
   }
 
   return (
     <Panel>
-      <PanelTitle icon={<Settings size={18} />} title="Account" />
+      <PanelTitle icon={<Settings size={18} />} title={t("settings.account")} />
       <form className="auth-form" onSubmit={submit}>
         <div className="segmented">
           <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-            Login
+            {t("settings.login")}
           </button>
           <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
-            Register
+            {t("settings.register")}
           </button>
         </div>
-        {mode === "register" ? <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" /> : null}
-        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" />
-        <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" />
+        {mode === "register" ? (
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("settings.name")} />
+        ) : null}
+        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("settings.email")} type="email" />
+        <input
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder={t("settings.password")}
+          type="password"
+        />
         <div className="toolbar">
-          <Button type="submit">{mode === "login" ? "Login" : "Register"}</Button>
+          <Button type="submit">{mode === "login" ? t("settings.login") : t("settings.register")}</Button>
           <Button
             type="button"
             variant="secondary"
             onClick={() => {
               localStorage.removeItem("zada.accessToken");
               localStorage.removeItem("zada.refreshToken");
-              setMessage("Signed out locally");
+              setMessage({ type: "signedOut" });
             }}
           >
-            Logout
+            {t("settings.logout")}
           </Button>
         </div>
-        <span className="form-message">{message}</span>
+        <span className="form-message">{authMessageLabel(t, message)}</span>
       </form>
     </Panel>
   );
 }
 
 function SubscriptionView({ compact = false }: { compact?: boolean }) {
+  const { t } = useI18n();
   const subscription = useAppStore((state) => state.subscription);
   const features = Object.entries(premiumFeatures).slice(0, compact ? 6 : 15);
   const [message, setMessage] = useState("");
 
   return (
     <section>
-      {!compact ? <PageHeader title="Subscription" meta={`Plan: ${subscription.plan}`} /> : null}
+      {!compact ? (
+        <PageHeader title={t("nav.subscription")} meta={t("subscription.plan", { plan: planLabel(t, subscription.plan) })} />
+      ) : null}
       <Panel>
-        <PanelTitle icon={<Sparkles size={18} />} title="Premium Gates" />
+        <PanelTitle icon={<Sparkles size={18} />} title={t("subscription.premiumGates")} />
         <div className="subscription-head">
           <div>
-            <strong>{subscription.plan}</strong>
-            <span>{subscription.status}</span>
+            <strong>{planLabel(t, subscription.plan)}</strong>
+            <span>{statusLabel(t, subscription.status)}</span>
           </div>
-          <Button
-            onClick={() => setMessage("Subscription purchase is not available yet.")}
-            title="Upgrade"
-          >
+          <Button onClick={() => setMessage(t("subscription.purchaseUnavailable"))} title={t("common.upgrade")}>
             <Sparkles size={16} />
-            Upgrade
+            {t("common.upgrade")}
           </Button>
         </div>
         {message ? <div className="inline-alert">{message}</div> : null}
         <div className="feature-list">
-          {features.map(([key, feature]) => {
+          {features.map(([key]) => {
             const access = canUseFeatureOffline(key as keyof typeof premiumFeatures, subscription);
             return (
               <div className="feature-row" key={key}>
-                <span>{feature.label}</span>
-                <Badge tone={access.allowed ? "success" : "neutral"}>{access.allowed ? "enabled" : "pro"}</Badge>
+                <span>{featureLabel(t, key)}</span>
+                <Badge tone={access.allowed ? "success" : "neutral"}>
+                  {access.allowed ? t("subscription.featureEnabled") : t("common.pro")}
+                </Badge>
               </div>
             );
           })}
@@ -689,28 +776,30 @@ function SubscriptionView({ compact = false }: { compact?: boolean }) {
 }
 
 function NoteSyncPanel() {
+  const { t } = useI18n();
   const settings = useAppStore((state) => state.noteSettings);
   const toggleNotesSync = useAppStore((state) => state.toggleNotesSync);
 
   return (
     <Panel>
-      <PanelTitle icon={<RefreshCw size={18} />} title="Notes Sync" />
+      <PanelTitle icon={<RefreshCw size={18} />} title={t("noteSync.title")} />
       <div className="settings-row">
         <div>
-          <strong>Notes synchronization</strong>
-          <span>{settings.notesEnabled ? "New changes enter the sync queue." : "New changes stay on this device."}</span>
+          <strong>{t("noteSync.description")}</strong>
+          <span>{settings.notesEnabled ? t("noteSync.enabledDescription") : t("noteSync.disabledDescription")}</span>
         </div>
         <label className="switch">
           <input type="checkbox" checked={settings.notesEnabled} onChange={(event) => toggleNotesSync(event.target.checked)} />
           <span />
         </label>
       </div>
-      {!settings.notesEnabled ? <div className="inline-alert">Local-only notes are included in JSON export.</div> : null}
+      {!settings.notesEnabled ? <div className="inline-alert">{t("noteSync.localOnlyExport")}</div> : null}
     </Panel>
   );
 }
 
 function MarkdownPreview({ markdown }: { markdown: string }) {
+  const { t } = useI18n();
   const codeMatch = markdown.match(/```(\w+)?\n([\s\S]*?)```/);
   const beforeCode = codeMatch ? markdown.slice(0, codeMatch.index).trim() : markdown.trim();
   const links = parseInternalLinks(markdown);
@@ -725,7 +814,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
         <div className="code-block">
           <div className="code-head">
             <span>{codeMatch[1] ?? "text"}</span>
-            <button className="icon-button small" title="Copy code">
+            <button className="icon-button small" title={t("common.copyCode")}>
               <ClipboardList size={15} />
             </button>
           </div>
@@ -738,7 +827,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
         <div className="link-pills">
           {links.map((link) => (
             <span key={`${link.kind}-${link.target}`}>
-              {link.kind}: {link.target}
+              {dynamicLabel(t, `linkKinds.${link.kind}`, link.kind)}: {link.target}
             </span>
           ))}
         </div>
@@ -748,13 +837,14 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
 }
 
 function CodePreview() {
+  const { t } = useI18n();
   const code = `public class PlayerAttack : MonoBehaviour\n{\n    public void Attack()\n    {\n        hitbox.EnableFor(0.18f);\n    }\n}`;
 
   return (
     <div className="code-block">
       <div className="code-head">
         <span>csharp</span>
-        <button className="icon-button small" title="Copy code">
+        <button className="icon-button small" title={t("common.copyCode")}>
           <ClipboardList size={15} />
         </button>
       </div>
@@ -766,29 +856,34 @@ function CodePreview() {
 }
 
 function MobileNav({ activeView, setActiveView }: { activeView: ViewId; setActiveView: (view: ViewId) => void }) {
+  const { t } = useI18n();
   const mobileItems = navItems.filter((item) => ["today", "projects", "calendar", "habits"].includes(item.id));
 
   return (
-    <nav className="mobile-nav" aria-label="Mobile">
-      {mobileItems.map((item) => (
-        <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => setActiveView(item.id)}>
-          {item.icon}
-          <span>{item.label}</span>
-        </button>
-      ))}
+    <nav className="mobile-nav" aria-label={t("shell.mobileNavigation")}>
+      {mobileItems.map((item) => {
+        const label = t(item.labelKey);
+        return (
+          <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => setActiveView(item.id)}>
+            {item.icon}
+            <span>{label}</span>
+          </button>
+        );
+      })}
       <button className={activeView === "settings" ? "active" : ""} onClick={() => setActiveView("settings")}>
         <MoreHorizontal size={18} />
-        <span>More</span>
+        <span>{t("common.more")}</span>
       </button>
     </nav>
   );
 }
 
-function SyncIndicator({ state }: { state: string }) {
+function SyncIndicator({ state }: { state: "offline" | "idle" | "syncing" | "error" }) {
+  const { t } = useI18n();
   return (
     <div className={`sync-indicator ${state}`}>
       <span />
-      {state}
+      {t(`syncState.${state}`)}
     </div>
   );
 }
@@ -820,4 +915,86 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+type AuthMessage =
+  | { type: "signedInLocal" }
+  | { type: "notSignedIn" }
+  | { type: "signedInAs"; email: string }
+  | { type: "signedOut" }
+  | { type: "authFailed" }
+  | { type: "invalidCredentials" };
+
+function authMessageLabel(t: TFunction, message: AuthMessage): string {
+  switch (message.type) {
+    case "signedInLocal":
+      return t("settings.signedInLocally");
+    case "signedInAs":
+      return t("settings.signedInAs", { email: message.email });
+    case "signedOut":
+      return t("settings.signedOutLocally");
+    case "authFailed":
+      return t("settings.authFailed");
+    case "invalidCredentials":
+      return t("settings.invalidCredentials");
+    default:
+      return t("settings.notSignedIn");
+  }
+}
+
+function noteStatusLabel(t: TFunction, status: string): string {
+  const keyByStatus: Record<string, TranslationKey> = {
+    local_only: "notes.statusLocalOnly",
+    pending: "notes.statusPending",
+    synced: "notes.statusSynced",
+    error: "notes.statusError"
+  };
+
+  return t(keyByStatus[status] ?? "notes.statusPending");
+}
+
+function planLabel(t: TFunction, plan: string): string {
+  const keyByPlan: Record<string, TranslationKey> = {
+    free: "subscription.free",
+    pro: "subscription.pro",
+    lifetime_dev: "subscription.lifetimeDev",
+    admin: "subscription.admin"
+  };
+
+  return t(keyByPlan[plan] ?? "subscription.free");
+}
+
+function statusLabel(t: TFunction, status: string): string {
+  const keyByStatus: Record<string, TranslationKey> = {
+    inactive: "subscription.inactive",
+    active: "subscription.active",
+    past_due: "subscription.pastDue",
+    canceled: "subscription.canceled",
+    manual: "subscription.manual"
+  };
+
+  return t(keyByStatus[status] ?? "subscription.inactive");
+}
+
+function featureLabel(t: TFunction, featureKey: string): string {
+  return dynamicLabel(t, `subscription.features.${featureKey}`, premiumFeatures[featureKey as keyof typeof premiumFeatures]?.label ?? featureKey);
+}
+
+function groupTitleLabel(t: TFunction, title: string): string {
+  const keyByTitle: Record<string, TranslationKey> = {
+    "Core Mechanics": "gameDev.templateGroups.coreMechanics",
+    Player: "gameDev.templateGroups.player",
+    Enemies: "gameDev.templateGroups.enemies",
+    "UI/UX": "gameDev.templateGroups.uiUx",
+    Bugs: "gameDev.templateGroups.bugs",
+    Milestones: "gameDev.templateGroups.milestones"
+  };
+
+  const key = keyByTitle[title];
+  return key ? t(key) : title;
+}
+
+function dynamicLabel(t: TFunction, key: string, fallback: string): string {
+  const translated = t(key as TranslationKey);
+  return translated === key ? fallback : translated;
 }

@@ -855,7 +855,7 @@ section {
   }
 
   .topbar-actions .sync-indicator,
-  .topbar-actions .icon-button[title="Notifications"] {
+  .topbar-actions .notification-button {
     display: none;
   }
 

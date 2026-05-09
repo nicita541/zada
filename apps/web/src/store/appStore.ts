@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import {
-  createGameDevOutline,
   createSyncQueueItem,
   defaultNoteSyncSettings,
   nextNoteSyncStatus,
@@ -63,8 +62,8 @@ const defaultSubscription: SubscriptionSnapshot = {
 const starterTasks: LocalTask[] = [
   {
     id: "starter-inbox",
-    title: "Collect project ideas",
-    description: "Inbox stays fast and uncluttered.",
+    title: "Собрать идеи проекта",
+    description: "Входящие остаются быстрыми и не перегруженными.",
     type: "feature",
     priority: "p2",
     dueDate: new Date().toISOString().slice(0, 10),
@@ -74,8 +73,8 @@ const starterTasks: LocalTask[] = [
   },
   {
     id: "starter-gdd",
-    title: "Draft GDD combat section",
-    description: "Link design notes, bugs, and snippets as the idea matures.",
+    title: "Набросать раздел GDD про бой",
+    description: "Связать дизайн-заметки, баги и сниппеты по мере развития идеи.",
     type: "design",
     priority: "p1",
     dueDate: null,
@@ -85,7 +84,16 @@ const starterTasks: LocalTask[] = [
   }
 ];
 
-const defaultImportSource = createGameDevOutline("RPG Demo");
+const defaultImportSource = `# Проект: RPG Demo
+
+1. Игрок [code]
+  1.1 Реализовать движение #player #movement p1
+  1.2 Реализовать атаку #combat p1
+2. Боевая система [design]
+  2.1 Описать тайминги удара #gdd
+  2.2 Создать тестовый баг #combat [bug]
+3. Вертикальный срез [milestone]
+  3.1 Подготовить сборку #release`;
 
 export const useAppStore = create<AppState>((set, get) => ({
   activeView: "today",
@@ -93,8 +101,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   notes: [
     {
       id: "note-combat",
-      title: "Combat System",
-      content: "## Timing\n\n[[Task: Draft GDD combat section]]\n\n```csharp\npublic void Attack() {}\n```",
+      title: "Боевая система",
+      content: "## Тайминги\n\n[[Task: Набросать раздел GDD про бой]]\n\n```csharp\npublic void Attack() {}\n```",
       tags: ["combat"],
       syncStatus: "pending",
       updatedAt: now()

@@ -1,0 +1,239 @@
+import type { TranslationDictionary } from "./types";
+
+export const en = {
+  common: {
+    appName: "Zada",
+    add: "Add",
+    active: "active",
+    cancel: "Cancel",
+    confirm: "Confirm",
+    copyCode: "Copy code",
+    create: "Create",
+    done: "Done",
+    enabled: "enabled",
+    error: "Error",
+    exportJson: "Export JSON",
+    loading: "Loading",
+    local: "Local",
+    more: "More",
+    no: "No",
+    open: "Open",
+    pro: "Pro",
+    reset: "Reset",
+    save: "Save",
+    searchPlaceholder: "Search tasks, notes, snippets",
+    start: "Start",
+    sync: "Sync",
+    syncNow: "Sync now",
+    upgrade: "Upgrade",
+    yes: "Yes"
+  },
+  nav: {
+    today: "Today",
+    projects: "Projects",
+    calendar: "Calendar",
+    habits: "Habits",
+    notes: "Notes",
+    import: "Import",
+    gameDev: "Game Dev",
+    focus: "Focus",
+    stats: "Stats",
+    settings: "Settings",
+    subscription: "Subscription"
+  },
+  shell: {
+    personalWorkspace: "Personal workspace",
+    mainNavigation: "Main navigation",
+    mobileNavigation: "Mobile navigation",
+    notifications: "Notifications",
+    toggleTheme: "Toggle theme",
+    addTask: "Add task"
+  },
+  today: {
+    metaOpenTasks: "{count} open tasks",
+    quickAddPlaceholder: "Add task #tag p1 due:2026-05-10 [bug]",
+    toggleComplete: "Toggle complete",
+    openTask: "Open task",
+    dailyLoad: "Daily Load",
+    open: "Open",
+    upcoming: "Upcoming"
+  },
+  projects: {
+    meta: "Workspace overview",
+    inbox: "Inbox",
+    gameProject: "Game Development Project",
+    bugTracker: "Bug Tracker",
+    linkedTasks: "{count} linked tasks",
+    columns: {
+      ideas: "Ideas",
+      backlog: "Backlog",
+      todo: "Todo",
+      inProgress: "In Progress",
+      testing: "Testing",
+      done: "Done"
+    }
+  },
+  calendar: {
+    meta: "Month, week, and agenda foundation",
+    agenda: "Agenda",
+    importPreview: "Import preview",
+    focusBlock: "Focus block"
+  },
+  habits: {
+    meta: "Simple streak tracking",
+    dailyPlanning: "Daily planning",
+    prototypeReview: "Prototype review",
+    writeDesignNotes: "Write design notes",
+    streak: "{count} day streak"
+  },
+  notes: {
+    syncEnabled: "Sync enabled",
+    localOnly: "Local-only",
+    newTitle: "New Note",
+    titlePlaceholder: "Note title",
+    tagsPlaceholder: "tags",
+    contentPlaceholder: "Note content",
+    internalLinks: "Internal Links",
+    statusLocalOnly: "local only",
+    statusPending: "pending",
+    statusSynced: "synced",
+    statusError: "error"
+  },
+  import: {
+    title: "Task Import",
+    outlineParser: "Outline parser",
+    preview: "Preview",
+    tasks: "Tasks",
+    warnings: "Warnings",
+    errors: "Errors",
+    project: "Project"
+  },
+  gameDev: {
+    workspaceEnabled: "Workspace enabled",
+    premiumGated: "Premium gated",
+    projectTemplate: "Project Template",
+    starterTasks: "{count} starter tasks",
+    premiumFeatureAlert: "Game Dev Workspace is a premium feature.",
+    snippets: "Snippets",
+    milestones: "Milestones",
+    templateGroups: {
+      coreMechanics: "Core Mechanics",
+      player: "Player",
+      enemies: "Enemies",
+      uiUx: "UI/UX",
+      bugs: "Bugs",
+      milestones: "Milestones"
+    },
+    milestonesList: {
+      prototype: "Prototype",
+      verticalSlice: "Vertical Slice",
+      alpha: "Alpha",
+      beta: "Beta",
+      release: "Release"
+    }
+  },
+  focus: {
+    meta: "Pomodoro session"
+  },
+  stats: {
+    meta: "Task and focus trends",
+    weekdays: {
+      mon: "Mon",
+      tue: "Tue",
+      wed: "Wed",
+      thu: "Thu",
+      fri: "Fri"
+    }
+  },
+  settings: {
+    meta: "Workspace preferences",
+    account: "Account",
+    interface: "Interface",
+    language: "Language",
+    russian: "Russian",
+    english: "English",
+    signedInLocally: "Signed in locally",
+    notSignedIn: "Not signed in",
+    signedInAs: "Signed in as {email}",
+    signedOutLocally: "Signed out locally",
+    authFailed: "Authentication failed",
+    invalidCredentials: "Invalid email or password",
+    login: "Login",
+    logout: "Logout",
+    register: "Register",
+    name: "Name",
+    email: "Email",
+    password: "Password"
+  },
+  subscription: {
+    plan: "Plan: {plan}",
+    premiumGates: "Premium Gates",
+    purchaseUnavailable: "Subscription purchase is not available yet.",
+    featureEnabled: "enabled",
+    free: "Free",
+    pro: "Pro",
+    lifetimeDev: "Lifetime Dev",
+    admin: "Admin",
+    inactive: "Inactive",
+    active: "Active",
+    pastDue: "Past due",
+    canceled: "Canceled",
+    manual: "Manual",
+    features: {
+      unlimited_projects: "Unlimited projects",
+      advanced_stats: "Advanced statistics",
+      saved_filters: "Saved filters",
+      advanced_reminders: "Advanced reminders",
+      custom_themes: "Custom themes",
+      csv_export: "CSV export",
+      advanced_import: "Advanced import",
+      game_dev_workspace: "Game Dev Workspace",
+      gdd_documents: "GDD documents",
+      game_concept_documents: "Game concept documents",
+      code_snippets: "Code snippets",
+      local_file_references: "Local file references",
+      game_dev_dashboard: "Game dev dashboard",
+      bug_tracker_advanced: "Advanced bug tracker",
+      milestones_advanced: "Advanced milestones"
+    }
+  },
+  noteSync: {
+    title: "Notes Sync",
+    description: "Notes synchronization",
+    enabledDescription: "New changes enter the sync queue.",
+    disabledDescription: "New changes stay on this device.",
+    localOnlyExport: "Local-only notes are included in JSON export."
+  },
+  taskTypes: {
+    feature: "feature",
+    bug: "bug",
+    polish: "polish",
+    balance: "balance",
+    art: "art",
+    audio: "audio",
+    ui: "ui",
+    code: "code",
+    design: "design",
+    research: "research",
+    testing: "testing",
+    build: "build",
+    release: "release",
+    milestone: "milestone"
+  },
+  linkKinds: {
+    Task: "Task",
+    Note: "Note",
+    Concept: "Concept",
+    File: "File",
+    GDD: "GDD",
+    Snippet: "Snippet",
+    Bug: "Bug",
+    Milestone: "Milestone"
+  },
+  syncState: {
+    offline: "Offline",
+    idle: "Idle",
+    syncing: "Syncing",
+    error: "Error"
+  }
+} satisfies TranslationDictionary;

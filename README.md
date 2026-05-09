@@ -103,6 +103,20 @@ Run `npm install` again after package changes so workspace links are refreshed.
 - Electron preload bridge for `window.zadaDesktop.openLocalPath(path)` and `window.zadaDesktop.revealInExplorer(path)` with `contextIsolation` enabled and `nodeIntegration` disabled.
 - Capacitor config wired to the shared web build.
 
+## Язык интерфейса
+
+- По умолчанию интерфейс открывается на русском языке.
+- Поддерживаются `ru` и `en`.
+- Язык можно переключить в `Настройки -> Интерфейс -> Язык интерфейса`.
+- Выбор применяется сразу, без перезагрузки страницы.
+- Выбранный язык хранится локально в `localStorage` под ключом `zada.locale`.
+- Если сохранён неизвестный язык, приложение использует fallback на `ru`.
+- Новые языки можно добавить через словари в `apps/web/src/i18n/`.
+
+## MVP Status
+
+Текущий проект остаётся foundation/MVP-in-progress. Подробный аудит находится в `docs/MVP_GAP_REPORT.md`. Многие области уже имеют рабочие части, но значительная часть модулей всё ещё в состоянии `Partial` или `Skeleton`.
+
 ## Not Implemented Yet
 
 - Real payment provider integration.
