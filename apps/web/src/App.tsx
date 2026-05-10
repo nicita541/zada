@@ -6,16 +6,19 @@ import {
   Check,
   ChevronRight,
   ClipboardList,
+  Clock,
   Code2,
   Columns3,
   Download,
   FileCode2,
   FileText,
+  Filter,
   Flame,
   Gauge,
   Import,
   KeyRound,
   Link2,
+  ListChecks,
   LogOut,
   Moon,
   MoreHorizontal,
@@ -24,10 +27,12 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Repeat2,
   Search,
   Settings,
   Sparkles,
   Sun,
+  Tag,
   Timer,
   Trash2,
   Upload,
@@ -41,6 +46,7 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Badge, Button, Panel } from "@zada/ui";
 import { canUseFeatureOffline, gameDevTemplate, parseInternalLinks, premiumFeatures } from "@zada/shared";
 import { useAppStore, type ViewId } from "./store/appStore";
+import type { LocalReminder, LocalSubtask, LocalTask } from "./lib/db";
 import { I18nProvider, useI18n, type Locale, type TranslationKey } from "./i18n";
 
 const navItems: Array<{ id: ViewId; labelKey: TranslationKey; icon: ReactNode }> = [
@@ -110,11 +116,20 @@ function AppShell() {
   const syncState = useAppStore((state) => state.syncState);
   const manualSync = useAppStore((state) => state.manualSync);
   const currentUser = useAppStore((state) => state.currentUser);
+  const searchQuery = useAppStore((state) => state.searchQuery);
+  const setSearchQuery = useAppStore((state) => state.setSearchQuery);
+  const dueReminders = useAppStore((state) => state.dueReminders);
+  const dismissReminder = useAppStore((state) => state.dismissReminder);
+  const refreshDueReminders = useAppStore((state) => state.refreshDueReminders);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    refreshDueReminders();
+  }, [refreshDueReminders]);
 
   return (
     <div className="app-shell">
@@ -148,7 +163,11 @@ function AppShell() {
         <header className="topbar">
           <div className="search-box">
             <Search size={18} />
-            <input placeholder={t("common.searchPlaceholder")} />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={t("common.searchPlaceholder")}
+            />
           </div>
           <div className="topbar-actions">
             <SyncIndicator state={syncState} />
@@ -168,6 +187,18 @@ function AppShell() {
         </header>
 
         <div className="content-scroll">
+          {dueReminders.length > 0 ? (
+            <div className="reminder-banner">
+              <Bell size={16} />
+              <strong>{t("today.dueReminders")}</strong>
+              {dueReminders.slice(0, 3).map((reminder) => (
+                <button key={reminder.id} type="button" onClick={() => dismissReminder(reminder.id)}>
+                  {new Date(reminder.remindAt).toLocaleString()}
+                  <X size={14} />
+                </button>
+              ))}
+            </div>
+          ) : null}
           <ViewRenderer view={activeView} />
         </div>
       </main>
@@ -211,44 +242,35 @@ function ViewRenderer({ view }: { view: ViewId }) {
 function TodayView() {
   const { t } = useI18n();
   const tasks = useAppStore((state) => state.tasks);
-  const toggleTask = useAppStore((state) => state.toggleTask);
-  const selectTask = useAppStore((state) => state.selectTask);
+  const projects = useAppStore((state) => state.projects);
+  const tags = useAppStore((state) => state.tags);
+  const subtasksByTaskId = useAppStore((state) => state.subtasksByTaskId);
+  const remindersByTaskId = useAppStore((state) => state.remindersByTaskId);
+  const searchQuery = useAppStore((state) => state.searchQuery);
+  const taskFilters = useAppStore((state) => state.taskFilters);
+  const setTaskFilters = useAppStore((state) => state.setTaskFilters);
+  const clearTaskFilters = useAppStore((state) => state.clearTaskFilters);
   const completedCount = tasks.filter((task) => task.completed).length;
-  const openTasks = tasks.filter((task) => !task.completed);
+  const visibleTasks = filterTasks(tasks, searchQuery, taskFilters);
+  const openTasks = visibleTasks.filter((task) => !task.completed);
+  const todayGroups = groupTodayTasks(visibleTasks);
+  const upcomingGroups = groupUpcomingTasks(visibleTasks);
 
   return (
     <div className="page-grid">
       <section className="page-main">
         <PageHeader title={t("nav.today")} meta={t("today.metaOpenTasks", { count: openTasks.length })} />
         <QuickAdd />
-        <div className="task-list">
-          {tasks.map((task) => (
-            <article className={`task-row ${task.completed ? "done" : ""}`} key={task.id}>
-              <button className="check-button" title={t("today.toggleComplete")} onClick={() => toggleTask(task.id)}>
-                {task.completed ? <Check size={15} /> : null}
-              </button>
-              <div className="task-body">
-                <div className="task-title-row">
-                  <h3>{task.title}</h3>
-                  <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
-                    {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
-                  </Badge>
-                </div>
-                {task.description ? <p>{task.description}</p> : null}
-                <div className="task-meta">
-                  {task.priority ? <span>{task.priority.toUpperCase()}</span> : null}
-                  {task.dueDate ? <span>{task.dueDate}</span> : null}
-                  {task.tags.map((tag) => (
-                    <span key={tag}>#{tag}</span>
-                  ))}
-                </div>
-              </div>
-              <button className="icon-button small" title={t("today.openTask")} onClick={() => selectTask(task.id)}>
-                <ChevronRight size={16} />
-              </button>
-            </article>
-          ))}
-        </div>
+        <GroupedTaskList
+          groups={[
+            [t("today.overdue"), todayGroups.overdue],
+            [t("today.todayGroup"), todayGroups.today],
+            [t("today.noDate"), todayGroups.noDate]
+          ]}
+          subtasksByTaskId={subtasksByTaskId}
+          remindersByTaskId={remindersByTaskId}
+        />
+        {visibleTasks.length === 0 ? <div className="inline-alert">{t("today.noTasks")}</div> : null}
       </section>
 
       <aside className="page-side">
@@ -262,18 +284,54 @@ function TodayView() {
           </div>
         </Panel>
         <Panel>
-          <PanelTitle icon={<CalendarDays size={18} />} title={t("today.upcoming")} />
-          <div className="compact-list">
-            {tasks
-              .filter((task) => task.dueDate)
-              .slice(0, 4)
-              .map((task) => (
-                <div className="compact-row" key={task.id}>
-                  <span>{task.title}</span>
-                  <strong>{task.dueDate}</strong>
-                </div>
+          <PanelTitle icon={<Filter size={18} />} title={t("today.filters")} />
+          <div className="filter-stack">
+            <select value={taskFilters.projectId ?? ""} onChange={(event) => setTaskFilters({ projectId: event.target.value || null })}>
+              <option value="">{t("today.allProjects")}</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
               ))}
+            </select>
+            <select value={taskFilters.status} onChange={(event) => setTaskFilters({ status: event.target.value as "all" | "todo" | "done" })}>
+              <option value="all">{t("today.allStatuses")}</option>
+              <option value="todo">{t("today.activeOnly")}</option>
+              <option value="done">{t("today.completedOnly")}</option>
+            </select>
+            <select value={taskFilters.priority ?? ""} onChange={(event) => setTaskFilters({ priority: event.target.value || null })}>
+              <option value="">{t("today.allPriorities")}</option>
+              {["p1", "p2", "p3", "p4"].map((priority) => (
+                <option key={priority} value={priority}>
+                  {priority.toUpperCase()}
+                </option>
+              ))}
+            </select>
+            <select value={taskFilters.type ?? ""} onChange={(event) => setTaskFilters({ type: event.target.value || null })}>
+              <option value="">{t("today.allTypes")}</option>
+              {["feature", "bug", "design", "code", "testing", "build"].map((type) => (
+                <option key={type} value={type}>
+                  {dynamicLabel(t, `taskTypes.${type}`, type)}
+                </option>
+              ))}
+            </select>
+            <select value={taskFilters.tag ?? ""} onChange={(event) => setTaskFilters({ tag: event.target.value || null })}>
+              <option value="">{t("today.allTags")}</option>
+              {tags.map((tag) => (
+                <option key={tag.id} value={tag.name}>
+                  #{tag.name}
+                </option>
+              ))}
+            </select>
+            <Button type="button" variant="secondary" onClick={clearTaskFilters}>
+              <X size={16} />
+              {t("common.clear")}
+            </Button>
           </div>
+        </Panel>
+        <Panel>
+          <PanelTitle icon={<CalendarDays size={18} />} title={t("today.upcoming")} />
+          <UpcomingList groups={upcomingGroups} />
         </Panel>
       </aside>
     </div>
@@ -300,6 +358,118 @@ function QuickAdd() {
         {t("common.add")}
       </Button>
     </form>
+  );
+}
+
+function GroupedTaskList({
+  groups,
+  subtasksByTaskId,
+  remindersByTaskId
+}: {
+  groups: Array<[string, LocalTask[]]>;
+  subtasksByTaskId: Record<string, LocalSubtask[]>;
+  remindersByTaskId: Record<string, LocalReminder[]>;
+}) {
+  return (
+    <div className="task-list grouped-task-list">
+      {groups.map(([label, groupTasks]) =>
+        groupTasks.length > 0 ? (
+          <section className="task-group" key={label}>
+            <h2>{label}</h2>
+            {groupTasks.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                subtasks={subtasksByTaskId[task.id] ?? []}
+                reminders={remindersByTaskId[task.id] ?? []}
+              />
+            ))}
+          </section>
+        ) : null
+      )}
+    </div>
+  );
+}
+
+function TaskRow({
+  task,
+  subtasks,
+  reminders
+}: {
+  task: LocalTask;
+  subtasks: LocalSubtask[];
+  reminders: LocalReminder[];
+}) {
+  const { t } = useI18n();
+  const toggleTask = useAppStore((state) => state.toggleTask);
+  const selectTask = useAppStore((state) => state.selectTask);
+  const completedSubtasks = subtasks.filter((subtask) => subtask.completed).length;
+  const activeReminders = reminders.filter((reminder) => !reminder.dismissedAt).length;
+
+  return (
+    <article className={`task-row ${task.completed ? "done" : ""}`}>
+      <button className="check-button" title={t("today.toggleComplete")} onClick={() => toggleTask(task.id)}>
+        {task.completed ? <Check size={15} /> : null}
+      </button>
+      <div className="task-body">
+        <div className="task-title-row">
+          <h3>{task.title}</h3>
+          <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
+            {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
+          </Badge>
+        </div>
+        {task.description ? <p>{task.description}</p> : null}
+        <div className="task-meta">
+          {task.priority ? <span>{task.priority.toUpperCase()}</span> : null}
+          {task.dueDate ? <span>{task.dueDate}</span> : null}
+          {task.time ? <span>{task.time}</span> : null}
+          {task.repeat ? <span>{repeatLabel(t, task.repeat)}</span> : null}
+          {subtasks.length > 0 ? (
+            <span>
+              {completedSubtasks}/{subtasks.length}
+            </span>
+          ) : null}
+          {activeReminders > 0 ? <span>{activeReminders}</span> : null}
+          {task.tags.map((tag) => (
+            <span key={tag}>#{tag}</span>
+          ))}
+        </div>
+      </div>
+      <button className="icon-button small" title={t("today.openTask")} onClick={() => selectTask(task.id)}>
+        <ChevronRight size={16} />
+      </button>
+    </article>
+  );
+}
+
+function UpcomingList({ groups }: { groups: { nextSeven: LocalTask[]; later: LocalTask[] } }) {
+  const { t } = useI18n();
+  const selectTask = useAppStore((state) => state.selectTask);
+  const entries: Array<[string, LocalTask[]]> = [
+    [t("today.nextSevenDays"), groups.nextSeven],
+    [t("today.later"), groups.later]
+  ];
+
+  if (groups.nextSeven.length === 0 && groups.later.length === 0) {
+    return <div className="inline-alert">{t("today.noUpcoming")}</div>;
+  }
+
+  return (
+    <div className="compact-list">
+      {entries.map(([label, tasks]) =>
+        tasks.length > 0 ? (
+          <div className="upcoming-group" key={label}>
+            <strong>{label}</strong>
+            {tasks.slice(0, 5).map((task) => (
+              <button className="compact-row compact-button" key={task.id} type="button" onClick={() => selectTask(task.id)}>
+                <span>{task.title}</span>
+                <strong>{task.dueDate}</strong>
+              </button>
+            ))}
+          </div>
+        ) : null
+      )}
+    </div>
   );
 }
 
@@ -1115,6 +1285,18 @@ function TaskDetailModal() {
   const deleteTask = useAppStore((state) => state.deleteTask);
   const completeTask = useAppStore((state) => state.completeTask);
   const uncompleteTask = useAppStore((state) => state.uncompleteTask);
+  const loadTaskDetail = useAppStore((state) => state.loadTaskDetail);
+  const subtasks = useAppStore((state) => (selectedTaskId ? (state.subtasksByTaskId[selectedTaskId] ?? []) : []));
+  const reminders = useAppStore((state) => (selectedTaskId ? (state.remindersByTaskId[selectedTaskId] ?? []) : []));
+  const tags = useAppStore((state) => state.tags);
+  const createSubtask = useAppStore((state) => state.createSubtask);
+  const updateSubtask = useAppStore((state) => state.updateSubtask);
+  const deleteSubtask = useAppStore((state) => state.deleteSubtask);
+  const createReminder = useAppStore((state) => state.createReminder);
+  const deleteReminder = useAppStore((state) => state.deleteReminder);
+  const createTag = useAppStore((state) => state.createTag);
+  const assignTaskTag = useAppStore((state) => state.assignTaskTag);
+  const removeTaskTag = useAppStore((state) => state.removeTaskTag);
   const [draft, setDraft] = useState({
     title: "",
     description: "",
@@ -1122,11 +1304,20 @@ function TaskDetailModal() {
     type: "feature",
     priority: "",
     dueDate: "",
+    time: "",
+    repeat: "",
+    estimatedMinutes: "",
     gameArea: "",
     severity: "",
     buildVersion: "",
+    stepsToReproduce: "",
+    expectedResult: "",
+    actualResult: "",
     tags: ""
   });
+  const [subtaskDraft, setSubtaskDraft] = useState("");
+  const [reminderDraft, setReminderDraft] = useState("");
+  const [tagDraft, setTagDraft] = useState("");
 
   useEffect(() => {
     if (!task) {
@@ -1140,12 +1331,24 @@ function TaskDetailModal() {
       type: task.type,
       priority: task.priority ?? "",
       dueDate: task.dueDate ?? "",
+      time: task.time ?? "",
+      repeat: task.repeat ?? "",
+      estimatedMinutes: task.estimatedMinutes ? String(task.estimatedMinutes) : "",
       gameArea: task.gameArea ?? "",
       severity: task.severity ?? "",
       buildVersion: task.buildVersion ?? "",
+      stepsToReproduce: task.stepsToReproduce ?? "",
+      expectedResult: task.expectedResult ?? "",
+      actualResult: task.actualResult ?? "",
       tags: task.tags.join(", ")
     });
   }, [task]);
+
+  useEffect(() => {
+    if (selectedTaskId) {
+      loadTaskDetail(selectedTaskId);
+    }
+  }, [loadTaskDetail, selectedTaskId]);
 
   if (!task) {
     return null;
@@ -1153,8 +1356,7 @@ function TaskDetailModal() {
 
   const activeTask = task;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function saveTask() {
     await updateTask(activeTask.id, {
       title: draft.title,
       description: draft.description,
@@ -1162,9 +1364,15 @@ function TaskDetailModal() {
       type: draft.type,
       priority: draft.priority || null,
       dueDate: draft.dueDate || null,
+      time: draft.time || null,
+      repeat: draft.repeat || null,
+      estimatedMinutes: draft.estimatedMinutes ? Number(draft.estimatedMinutes) : null,
       gameArea: draft.gameArea || null,
       severity: draft.severity || null,
       buildVersion: draft.buildVersion || null,
+      stepsToReproduce: draft.stepsToReproduce || null,
+      expectedResult: draft.expectedResult || null,
+      actualResult: draft.actualResult || null,
       tags: draft.tags
         .split(",")
         .map((tag) => tag.trim())
@@ -1176,9 +1384,33 @@ function TaskDetailModal() {
     await deleteTask(activeTask.id);
   }
 
+  async function submitSubtask(event: FormEvent) {
+    event.preventDefault();
+    await createSubtask(activeTask.id, subtaskDraft);
+    setSubtaskDraft("");
+  }
+
+  async function submitReminder(event: FormEvent) {
+    event.preventDefault();
+    if (!reminderDraft) {
+      return;
+    }
+    await createReminder(activeTask.id, new Date(reminderDraft).toISOString());
+    setReminderDraft("");
+  }
+
+  async function submitTag(event: FormEvent) {
+    event.preventDefault();
+    const tag = await createTag({ name: tagDraft });
+    if (tag) {
+      await assignTaskTag(activeTask.id, tag.id);
+    }
+    setTagDraft("");
+  }
+
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("taskDetail.title")}>
-      <form className="task-detail-modal" onSubmit={submit}>
+      <section className="task-detail-modal">
         <div className="modal-head">
           <div>
             <h2>{t("taskDetail.title")}</h2>
@@ -1192,10 +1424,13 @@ function TaskDetailModal() {
           <span>{t("taskDetail.taskTitle")}</span>
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
         </label>
-        <label>
-          <span>{t("taskDetail.description")}</span>
-          <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
-        </label>
+        <section className="detail-section">
+          <PanelTitle icon={<FileText size={18} />} title={t("taskDetail.descriptionSection")} />
+          <label>
+            <span>{t("taskDetail.description")}</span>
+            <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+          </label>
+        </section>
         <div className="form-grid">
           <label>
             <span>{t("taskDetail.project")}</span>
@@ -1234,6 +1469,19 @@ function TaskDetailModal() {
             <input type="date" value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} />
           </label>
           <label>
+            <span>{t("taskDetail.dueTime")}</span>
+            <input type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} />
+          </label>
+          <label>
+            <span>{t("taskDetail.estimatedMinutes")}</span>
+            <input
+              min="0"
+              type="number"
+              value={draft.estimatedMinutes}
+              onChange={(event) => setDraft({ ...draft, estimatedMinutes: event.target.value })}
+            />
+          </label>
+          <label>
             <span>{t("taskDetail.gameArea")}</span>
             <input value={draft.gameArea} onChange={(event) => setDraft({ ...draft, gameArea: event.target.value })} />
           </label>
@@ -1242,16 +1490,138 @@ function TaskDetailModal() {
             <input value={draft.severity} onChange={(event) => setDraft({ ...draft, severity: event.target.value })} />
           </label>
         </div>
-        <label>
-          <span>{t("taskDetail.buildVersion")}</span>
-          <input value={draft.buildVersion} onChange={(event) => setDraft({ ...draft, buildVersion: event.target.value })} />
-        </label>
-        <label>
-          <span>{t("taskDetail.tags")}</span>
-          <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} />
-        </label>
+        <section className="detail-section">
+          <PanelTitle icon={<ListChecks size={18} />} title={t("taskDetail.subtasks")} />
+          {subtasks.length > 0 ? (
+            <div className="detail-list">
+              {subtasks.map((subtask) => (
+                <div className="detail-list-row" key={subtask.id}>
+                  <label className="inline-check">
+                    <input
+                      type="checkbox"
+                      checked={subtask.completed}
+                      onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })}
+                    />
+                    <span>{subtask.title}</span>
+                  </label>
+                  <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => deleteSubtask(subtask.id)}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="inline-alert">{t("taskDetail.emptySubtasks")}</div>
+          )}
+          <form className="inline-form" onSubmit={submitSubtask}>
+            <input
+              value={subtaskDraft}
+              onChange={(event) => setSubtaskDraft(event.target.value)}
+              placeholder={t("taskDetail.subtaskPlaceholder")}
+            />
+            <Button type="submit">
+              <Plus size={16} />
+              {t("common.add")}
+            </Button>
+          </form>
+        </section>
+
+        <section className="detail-section">
+          <PanelTitle icon={<Bell size={18} />} title={t("taskDetail.reminders")} />
+          {reminders.length > 0 ? (
+            <div className="detail-list">
+              {reminders.map((reminder) => (
+                <div className="detail-list-row" key={reminder.id}>
+                  <span>{new Date(reminder.remindAt).toLocaleString()}</span>
+                  <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => deleteReminder(reminder.id)}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="inline-alert">{t("taskDetail.emptyReminders")}</div>
+          )}
+          <form className="inline-form" onSubmit={submitReminder}>
+            <input
+              type="datetime-local"
+              value={reminderDraft}
+              onChange={(event) => setReminderDraft(event.target.value)}
+              aria-label={t("taskDetail.reminderAt")}
+            />
+            <Button type="submit">
+              <Clock size={16} />
+              {t("common.add")}
+            </Button>
+          </form>
+        </section>
+
+        <section className="detail-section">
+          <PanelTitle icon={<Repeat2 size={18} />} title={t("taskDetail.repeat")} />
+          <select value={draft.repeat} onChange={(event) => setDraft({ ...draft, repeat: event.target.value })}>
+            <option value="">{t("taskDetail.repeatNone")}</option>
+            <option value="daily">{t("taskDetail.repeatDaily")}</option>
+            <option value="weekly">{t("taskDetail.repeatWeekly")}</option>
+            <option value="monthly">{t("taskDetail.repeatMonthly")}</option>
+            <option value="yearly">{t("taskDetail.repeatYearly")}</option>
+            <option value="weekdays">{t("taskDetail.repeatWeekdays")}</option>
+          </select>
+        </section>
+
+        <section className="detail-section">
+          <PanelTitle icon={<Tag size={18} />} title={t("taskDetail.tags")} />
+          <div className="tag-pool">
+            {tags.map((tag) => {
+              const active = activeTask.tags.includes(tag.name);
+              return (
+                <button
+                  key={tag.id}
+                  className={active ? "active" : ""}
+                  type="button"
+                  onClick={() => (active ? removeTaskTag(activeTask.id, tag.id) : assignTaskTag(activeTask.id, tag.id))}
+                >
+                  #{tag.name}
+                </button>
+              );
+            })}
+          </div>
+          <form className="inline-form" onSubmit={submitTag}>
+            <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder={t("taskDetail.tagPlaceholder")} />
+            <Button type="submit">
+              <Plus size={16} />
+              {t("taskDetail.addTag")}
+            </Button>
+          </form>
+          <label>
+            <span>{t("taskDetail.tags")}</span>
+            <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} />
+          </label>
+        </section>
+
+        <section className="detail-section">
+          <PanelTitle icon={<MoreHorizontal size={18} />} title={t("taskDetail.additional")} />
+          <label>
+            <span>{t("taskDetail.buildVersion")}</span>
+            <input value={draft.buildVersion} onChange={(event) => setDraft({ ...draft, buildVersion: event.target.value })} />
+          </label>
+          <label>
+            <span>{t("taskDetail.stepsToReproduce")}</span>
+            <textarea
+              value={draft.stepsToReproduce}
+              onChange={(event) => setDraft({ ...draft, stepsToReproduce: event.target.value })}
+            />
+          </label>
+          <label>
+            <span>{t("taskDetail.expectedResult")}</span>
+            <textarea value={draft.expectedResult} onChange={(event) => setDraft({ ...draft, expectedResult: event.target.value })} />
+          </label>
+          <label>
+            <span>{t("taskDetail.actualResult")}</span>
+            <textarea value={draft.actualResult} onChange={(event) => setDraft({ ...draft, actualResult: event.target.value })} />
+          </label>
+        </section>
         <div className="toolbar modal-actions">
-          <Button type="submit">
+          <Button type="button" onClick={saveTask}>
             <Pencil size={16} />
             {t("common.save")}
           </Button>
@@ -1268,7 +1638,7 @@ function TaskDetailModal() {
             {t("common.delete")}
           </Button>
         </div>
-      </form>
+      </section>
     </div>
   );
 }
@@ -1371,6 +1741,72 @@ function statusLabel(t: TFunction, status: string): string {
 
 function featureLabel(t: TFunction, featureKey: string): string {
   return dynamicLabel(t, `subscription.features.${featureKey}`, premiumFeatures[featureKey as keyof typeof premiumFeatures]?.label ?? featureKey);
+}
+
+function filterTasks(tasks: LocalTask[], searchQuery: string, filters: ReturnType<typeof useAppStore.getState>["taskFilters"]) {
+  const query = searchQuery.trim().toLowerCase();
+  return tasks.filter((task) => {
+    if (filters.projectId && task.projectId !== filters.projectId) {
+      return false;
+    }
+    if (filters.status === "todo" && task.completed) {
+      return false;
+    }
+    if (filters.status === "done" && !task.completed) {
+      return false;
+    }
+    if (filters.priority && task.priority !== filters.priority) {
+      return false;
+    }
+    if (filters.type && task.type !== filters.type) {
+      return false;
+    }
+    if (filters.tag && !task.tags.includes(filters.tag)) {
+      return false;
+    }
+    if (!query) {
+      return true;
+    }
+
+    return [task.title, task.description, task.gameArea, task.buildVersion, ...task.tags]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  });
+}
+
+function groupTodayTasks(tasks: LocalTask[]) {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    overdue: tasks.filter((task) => !task.completed && task.dueDate && task.dueDate < today),
+    today: tasks.filter((task) => task.dueDate === today),
+    noDate: tasks.filter((task) => !task.dueDate)
+  };
+}
+
+function groupUpcomingTasks(tasks: LocalTask[]) {
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const end = new Date(today);
+  end.setDate(today.getDate() + 7);
+  const endKey = end.toISOString().slice(0, 10);
+  const dated = tasks.filter((task) => !task.completed && task.dueDate && task.dueDate > todayKey);
+  return {
+    nextSeven: dated.filter((task) => task.dueDate && task.dueDate <= endKey),
+    later: dated.filter((task) => task.dueDate && task.dueDate > endKey)
+  };
+}
+
+function repeatLabel(t: TFunction, repeat: string) {
+  const keyByRepeat: Record<string, TranslationKey> = {
+    daily: "taskDetail.repeatDaily",
+    weekly: "taskDetail.repeatWeekly",
+    monthly: "taskDetail.repeatMonthly",
+    yearly: "taskDetail.repeatYearly",
+    weekdays: "taskDetail.repeatWeekdays"
+  };
+  return t(keyByRepeat[repeat] ?? "taskDetail.repeat");
 }
 
 function groupTitleLabel(t: TFunction, title: string): string {

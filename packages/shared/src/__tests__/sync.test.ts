@@ -28,4 +28,19 @@ describe("createSyncQueueItem", () => {
     expect(item.operation).toBe("update");
     expect(item.payload).toBe(payload);
   });
+
+  it("supports task-detail entity queue types", () => {
+    const timestamp = new Date("2026-05-10T00:02:00.000Z");
+    const subtask = createSyncQueueItem("subtask", "subtask-1", "create", { taskId: "task-1", title: "Step" }, timestamp);
+    const reminder = createSyncQueueItem("reminder", "reminder-1", "create", { taskId: "task-1", remindAt: timestamp.toISOString() }, timestamp);
+    const tag = createSyncQueueItem("tag", "tag-1", "create", { name: "combat" }, timestamp);
+    const taskTag = createSyncQueueItem("task_tag", "task-1:tag-1", "create", { taskId: "task-1", tagId: "tag-1" }, timestamp);
+
+    expect([subtask.entityType, reminder.entityType, tag.entityType, taskTag.entityType]).toEqual([
+      "subtask",
+      "reminder",
+      "tag",
+      "task_tag"
+    ]);
+  });
 });

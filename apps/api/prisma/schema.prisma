@@ -124,6 +124,8 @@ model Task {
   startDate    DateTime? @map("start_date")
   time         String?
   repeat       String?
+  estimatedMinutes Int? @map("estimated_minutes")
+  completedAt  DateTime? @map("completed_at")
   remindAt     DateTime? @map("remind_at")
   position     Int       @default(0)
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -195,8 +197,11 @@ model Reminder {
   userId       String    @map("user_id") @db.Uuid
   workspaceId  String    @map("workspace_id") @db.Uuid
   taskId       String?   @map("task_id") @db.Uuid
+  habitId      String?   @map("habit_id") @db.Uuid
+  type         String    @default("task")
   remindAt     DateTime  @map("remind_at")
   deliveredAt  DateTime? @map("delivered_at")
+  dismissedAt  DateTime? @map("dismissed_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
@@ -205,6 +210,8 @@ model Reminder {
   task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([userId, workspaceId])
+  @@index([taskId])
+  @@index([userId, remindAt])
   @@map("reminders")
 }
 

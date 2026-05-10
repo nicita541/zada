@@ -18,7 +18,7 @@ const validTaskTypes = new Set<TaskType>([
 ]);
 
 const validPriorities = new Set<Priority>(["p1", "p2", "p3", "p4"]);
-const validRepeats = new Set<RepeatRule>(["daily", "weekly", "monthly"]);
+const validRepeats = new Set<RepeatRule>(["daily", "weekly", "monthly", "yearly", "weekdays"]);
 
 export function parseQuickAdd(input: string, options: { now?: Date } = {}): QuickAddResult {
   const tags = new Set<string>();
@@ -30,6 +30,11 @@ export function parseQuickAdd(input: string, options: { now?: Date } = {}): Quic
   let remindAt: string | null = null;
   let type: TaskType = "feature";
   let projectRef: string | null = null;
+  const repeatPhrase = extractRepeatPhrase(input);
+  if (repeatPhrase) {
+    input = repeatPhrase.input;
+    repeat = repeatPhrase.repeat;
+  }
 
   const titleParts: string[] = [];
   for (const token of tokenize(input)) {
@@ -71,7 +76,9 @@ export function parseQuickAdd(input: string, options: { now?: Date } = {}): Quic
 
     if (token.startsWith("repeat:")) {
       const value = token.slice(7).toLowerCase();
-      repeat = validRepeats.has(value as RepeatRule) ? (value as RepeatRule) : null;
+      if (validRepeats.has(value as RepeatRule)) {
+        repeat = value as RepeatRule;
+      }
       continue;
     }
 
@@ -103,6 +110,32 @@ export function parseQuickAdd(input: string, options: { now?: Date } = {}): Quic
     type,
     projectRef
   };
+}
+
+function extractRepeatPhrase(input: string): { input: string; repeat: RepeatRule } | null {
+  const patterns: Array<{ pattern: RegExp; repeat: RepeatRule }> = [
+    { pattern: /\b(?:every\s+day|daily)\b/i, repeat: "daily" },
+    { pattern: /\b(?:every\s+week|weekly)\b/i, repeat: "weekly" },
+    { pattern: /\b(?:every\s+month|monthly)\b/i, repeat: "monthly" },
+    { pattern: /\b(?:every\s+year|yearly|annually)\b/i, repeat: "yearly" },
+    { pattern: /\b(?:weekdays|every\s+weekday|mon-?fri)\b/i, repeat: "weekdays" },
+    { pattern: /(?:каждый\s+день|ежедневно)/iu, repeat: "daily" },
+    { pattern: /(?:каждую\s+неделю|еженедельно)/iu, repeat: "weekly" },
+    { pattern: /(?:каждый\s+месяц|ежемесячно)/iu, repeat: "monthly" },
+    { pattern: /(?:каждый\s+год|ежегодно)/iu, repeat: "yearly" },
+    { pattern: /(?:по\s+будням|будни)/iu, repeat: "weekdays" }
+  ];
+
+  for (const { pattern, repeat } of patterns) {
+    if (pattern.test(input)) {
+      return {
+        input: input.replace(pattern, " ").replace(/\s+/g, " ").trim(),
+        repeat
+      };
+    }
+  }
+
+  return null;
 }
 
 function tokenize(input: string): string[] {

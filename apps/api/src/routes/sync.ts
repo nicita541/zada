@@ -26,9 +26,13 @@ router.get(
   "/bootstrap",
   asyncHandler(async (req, res) => {
     const userId = currentUserId(req);
-    const [projects, tasks, notes, settings, latestChange] = await Promise.all([
+    const [projects, tasks, tags, taskTags, subtasks, reminders, notes, settings, latestChange] = await Promise.all([
       prisma.project.findMany({ where: { userId } }),
-      prisma.task.findMany({ where: { userId } }),
+      prisma.task.findMany({ where: { userId }, include: { taskTags: { include: { tag: true } }, subtasks: true, reminders: true } }),
+      prisma.tag.findMany({ where: { userId } }),
+      prisma.taskTag.findMany({ where: { task: { userId } } }),
+      prisma.subtask.findMany({ where: { userId } }),
+      prisma.reminder.findMany({ where: { userId } }),
       prisma.note.findMany({ where: { userId } }),
       prisma.userSettings.findUnique({ where: { userId } }),
       prisma.changeLog.findFirst({ where: { userId }, orderBy: { revision: "desc" } })
@@ -36,7 +40,7 @@ router.get(
 
     res.json({
       revision: latestChange?.revision ?? 0,
-      entities: { projects, tasks, notes, settings }
+      entities: { projects, tasks, tags, taskTags, subtasks, reminders, notes, settings }
     });
   })
 );
@@ -122,6 +126,8 @@ const taskPayloadSchema = z
     startDate: z.string().nullable().optional(),
     time: z.string().nullable().optional(),
     repeat: z.string().nullable().optional(),
+    estimatedMinutes: z.number().int().nullable().optional(),
+    completedAt: z.string().nullable().optional(),
     gameArea: z.string().nullable().optional(),
     severity: z.string().nullable().optional(),
     buildVersion: z.string().nullable().optional(),
@@ -134,6 +140,41 @@ const taskPayloadSchema = z
   })
   .passthrough();
 
+const tagPayloadSchema = z
+  .object({
+    name: z.string().min(1),
+    color: z.string().nullable().optional(),
+    workspaceId: z.string().uuid().nullable().optional()
+  })
+  .passthrough();
+
+const subtaskPayloadSchema = z
+  .object({
+    taskId: z.string().uuid(),
+    title: z.string().min(1),
+    completed: z.boolean().optional(),
+    position: z.number().int().optional(),
+    workspaceId: z.string().uuid().nullable().optional()
+  })
+  .passthrough();
+
+const reminderPayloadSchema = z
+  .object({
+    taskId: z.string().uuid().nullable().optional(),
+    remindAt: z.string(),
+    type: z.string().optional(),
+    dismissedAt: z.string().nullable().optional(),
+    workspaceId: z.string().uuid().nullable().optional()
+  })
+  .passthrough();
+
+const taskTagPayloadSchema = z
+  .object({
+    taskId: z.string().uuid(),
+    tagId: z.string().uuid()
+  })
+  .passthrough();
+
 async function applyChange(userId: string, change: SyncChange) {
   if (change.entityType === "project") {
     await applyProjectChange(userId, change);
@@ -142,6 +183,26 @@ async function applyChange(userId: string, change: SyncChange) {
 
   if (change.entityType === "task") {
     await applyTaskChange(userId, change);
+    return;
+  }
+
+  if (change.entityType === "tag") {
+    await applyTagChange(userId, change);
+    return;
+  }
+
+  if (change.entityType === "subtask") {
+    await applySubtaskChange(userId, change);
+    return;
+  }
+
+  if (change.entityType === "reminder") {
+    await applyReminderChange(userId, change);
+    return;
+  }
+
+  if (change.entityType === "task_tag") {
+    await applyTaskTagChange(userId, change);
   }
 }
 
@@ -204,6 +265,8 @@ async function applyTaskChange(userId: string, change: SyncChange) {
     startDate: payload.startDate ? new Date(payload.startDate) : null,
     time: payload.time ?? null,
     repeat: payload.repeat ?? null,
+    estimatedMinutes: payload.estimatedMinutes ?? null,
+    completedAt: payload.completedAt ? new Date(payload.completedAt) : null,
     gameArea: payload.gameArea ?? null,
     severity: payload.severity ?? null,
     buildVersion: payload.buildVersion ?? null,
@@ -223,6 +286,147 @@ async function applyTaskChange(userId: string, change: SyncChange) {
   if (payload.tags) {
     await syncTaskTags(userId, workspaceId, change.entityId, payload.tags);
   }
+}
+
+async function applyTagChange(userId: string, change: SyncChange) {
+  if (change.operation === "delete") {
+    await prisma.tag.updateMany({
+      where: { id: change.entityId, userId },
+      data: { deletedAt: new Date() }
+    });
+    return;
+  }
+
+  const payload = tagPayloadSchema.parse(change.payload);
+  const workspaceId = await workspaceIdFor(userId, payload.workspaceId ?? change.workspaceId);
+
+  await prisma.tag.upsert({
+    where: { id: change.entityId },
+    create: {
+      id: change.entityId,
+      userId,
+      workspaceId,
+      name: payload.name,
+      color: payload.color ?? null,
+      deletedAt: null
+    },
+    update: {
+      name: payload.name,
+      color: payload.color ?? null,
+      deletedAt: null
+    }
+  });
+}
+
+async function applySubtaskChange(userId: string, change: SyncChange) {
+  if (change.operation === "delete") {
+    await prisma.subtask.updateMany({
+      where: { id: change.entityId, userId },
+      data: { deletedAt: new Date() }
+    });
+    return;
+  }
+
+  const payload = subtaskPayloadSchema.parse(change.payload);
+  const task = await taskForUser(userId, payload.taskId);
+
+  await prisma.subtask.upsert({
+    where: { id: change.entityId },
+    create: {
+      id: change.entityId,
+      userId,
+      workspaceId: task.workspaceId,
+      taskId: task.id,
+      title: payload.title,
+      completed: payload.completed ?? false,
+      position: payload.position ?? 0,
+      deletedAt: null
+    },
+    update: {
+      title: payload.title,
+      completed: payload.completed ?? false,
+      position: payload.position ?? 0,
+      deletedAt: null
+    }
+  });
+}
+
+async function applyReminderChange(userId: string, change: SyncChange) {
+  if (change.operation === "delete") {
+    await prisma.reminder.updateMany({
+      where: { id: change.entityId, userId },
+      data: { deletedAt: new Date() }
+    });
+    return;
+  }
+
+  const payload = reminderPayloadSchema.parse(change.payload);
+  const task = payload.taskId ? await taskForUser(userId, payload.taskId) : null;
+  const workspaceId = task?.workspaceId ?? (await workspaceIdFor(userId, payload.workspaceId ?? change.workspaceId));
+
+  await prisma.reminder.upsert({
+    where: { id: change.entityId },
+    create: {
+      id: change.entityId,
+      userId,
+      workspaceId,
+      taskId: task?.id ?? null,
+      type: payload.type ?? "task",
+      remindAt: new Date(payload.remindAt),
+      dismissedAt: payload.dismissedAt ? new Date(payload.dismissedAt) : null,
+      deletedAt: null
+    },
+    update: {
+      taskId: task?.id ?? null,
+      type: payload.type ?? "task",
+      remindAt: new Date(payload.remindAt),
+      dismissedAt: payload.dismissedAt ? new Date(payload.dismissedAt) : null,
+      deletedAt: null
+    }
+  });
+}
+
+async function applyTaskTagChange(userId: string, change: SyncChange) {
+  const payload = taskTagPayloadSchema.parse(change.payload);
+  const task = await taskForUser(userId, payload.taskId);
+  const tag = await tagForUser(userId, payload.tagId);
+
+  if (change.operation === "delete") {
+    await prisma.taskTag.deleteMany({ where: { taskId: task.id, tagId: tag.id } });
+    return;
+  }
+
+  await prisma.taskTag.upsert({
+    where: { taskId_tagId: { taskId: task.id, tagId: tag.id } },
+    create: { taskId: task.id, tagId: tag.id },
+    update: {}
+  });
+}
+
+async function taskForUser(userId: string, taskId: string) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId, deletedAt: null },
+    select: { id: true, workspaceId: true }
+  });
+
+  if (!task) {
+    throw new Error("Task not found");
+  }
+
+  return task;
+}
+
+async function tagForUser(userId: string, tagId: string) {
+  const tag = await prisma.tag.findFirst({
+    where: { id: tagId, userId, deletedAt: null },
+    select: { id: true }
+  });
+
+  if (!tag) {
+    throw new Error("Tag not found");
+  }
+
+  return tag;
 }
 
 async function ownedProjectId(userId: string, projectId: string): Promise<string | null> {
@@ -284,8 +488,14 @@ function entityOrder(entityType: string) {
   if (entityType === "project") {
     return 0;
   }
-  if (entityType === "task") {
+  if (entityType === "tag") {
     return 1;
+  }
+  if (entityType === "task") {
+    return 2;
+  }
+  if (entityType === "subtask" || entityType === "reminder" || entityType === "task_tag") {
+    return 3;
   }
   return 2;
 }

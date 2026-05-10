@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { getNextDueDate } from "@zada/shared";
 import { Router } from "express";
 import { z } from "zod";
 import { currentUserId, requireAuth } from "../auth/middleware";
@@ -156,6 +157,7 @@ router.get(
         dueFrom: z.string().optional(),
         dueTo: z.string().optional(),
         search: z.string().trim().optional(),
+        type: z.string().optional(),
         tag: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(200).default(100),
         offset: z.coerce.number().int().min(0).default(0)
@@ -166,6 +168,7 @@ router.get(
       deletedAt: null,
       projectId: filters.projectId,
       status: filters.status,
+      type: filters.type,
       priority: filters.priority
     };
 
@@ -242,6 +245,7 @@ router.post(
         startDate: input.startDate ? new Date(input.startDate) : null,
         time: input.time,
         repeat: input.repeat,
+        estimatedMinutes: input.estimatedMinutes,
         position: input.position
       }
     });
@@ -317,9 +321,15 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = currentUserId(req);
     const taskId = routeId(req.params.id);
+    const task = await taskForUser(userId, taskId);
+    const completedAt = new Date();
+    const nextDueDate = getNextDueDate(formatDateOnly(task.dueDate), task.repeat, completedAt);
+
     await prisma.task.update({
       where: { id: taskId, userId },
-      data: { status: "done" }
+      data: nextDueDate
+        ? { dueDate: new Date(`${nextDueDate}T00:00:00.000Z`), status: "todo", completedAt: null }
+        : { status: "done", completedAt }
     });
     res.json(await taskForUser(userId, taskId));
   })
@@ -332,7 +342,7 @@ router.post(
     const taskId = routeId(req.params.id);
     await prisma.task.update({
       where: { id: taskId, userId },
-      data: { status: "todo" }
+      data: { status: "todo", completedAt: null }
     });
     res.json(await taskForUser(userId, taskId));
   })
@@ -367,6 +377,7 @@ router.post(
         startDate: source.startDate,
         time: source.time,
         repeat: source.repeat,
+        estimatedMinutes: source.estimatedMinutes,
         position: source.position + 1
       }
     });
@@ -395,6 +406,230 @@ router.delete(
 );
 
 router.get(
+  "/tasks/:taskId/subtasks",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const task = await taskForUser(userId, routeId(req.params.taskId));
+    const subtasks = await prisma.subtask.findMany({
+      where: { userId, taskId: task.id, deletedAt: null },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }]
+    });
+    res.json({ subtasks });
+  })
+);
+
+router.post(
+  "/tasks/:taskId/subtasks",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const task = await taskForUser(userId, routeId(req.params.taskId));
+    const input = subtaskInputSchema.parse(req.body);
+    const subtask = await prisma.subtask.create({
+      data: {
+        id: input.id,
+        userId,
+        workspaceId: task.workspaceId,
+        taskId: task.id,
+        title: input.title,
+        completed: input.completed,
+        position: input.position
+      }
+    });
+    res.status(201).json(subtask);
+  })
+);
+
+router.patch(
+  "/subtasks/:id",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const subtaskId = routeId(req.params.id);
+    await subtaskForUser(userId, subtaskId);
+    const input = subtaskInputSchema.partial().parse(req.body);
+    await prisma.subtask.update({
+      where: { id: subtaskId },
+      data: {
+        title: input.title,
+        completed: input.completed,
+        position: input.position
+      }
+    });
+    res.json(await subtaskForUser(userId, subtaskId));
+  })
+);
+
+router.delete(
+  "/subtasks/:id",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const subtaskId = routeId(req.params.id);
+    await subtaskForUser(userId, subtaskId);
+    await prisma.subtask.update({
+      where: { id: subtaskId },
+      data: { deletedAt: new Date() }
+    });
+    res.status(204).end();
+  })
+);
+
+router.post(
+  "/subtasks/reorder",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const input = z
+      .object({
+        items: z.array(z.object({ id: z.string().uuid(), position: z.number().int().min(0) }))
+      })
+      .parse(req.body);
+
+    for (const item of input.items) {
+      await subtaskForUser(userId, item.id);
+    }
+
+    await prisma.$transaction(
+      input.items.map((item) =>
+        prisma.subtask.update({
+          where: { id: item.id },
+          data: { position: item.position }
+        })
+      )
+    );
+
+    res.json({ ok: true });
+  })
+);
+
+router.get(
+  "/tasks/:taskId/reminders",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const task = await taskForUser(userId, routeId(req.params.taskId));
+    const reminders = await prisma.reminder.findMany({
+      where: { userId, taskId: task.id, deletedAt: null },
+      orderBy: { remindAt: "asc" }
+    });
+    res.json({ reminders });
+  })
+);
+
+router.post(
+  "/tasks/:taskId/reminders",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const task = await taskForUser(userId, routeId(req.params.taskId));
+    const input = reminderInputSchema.parse(req.body);
+    const reminder = await prisma.reminder.create({
+      data: {
+        id: input.id,
+        userId,
+        workspaceId: task.workspaceId,
+        taskId: task.id,
+        type: input.type,
+        remindAt: new Date(input.remindAt),
+        dismissedAt: input.dismissedAt ? new Date(input.dismissedAt) : null
+      }
+    });
+    res.status(201).json(reminder);
+  })
+);
+
+router.get(
+  "/reminders/due",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const now = new Date(String(req.query.now ?? new Date().toISOString()));
+    const reminders = await prisma.reminder.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        dismissedAt: null,
+        remindAt: { lte: Number.isNaN(now.getTime()) ? new Date() : now }
+      },
+      include: { task: true },
+      orderBy: { remindAt: "asc" },
+      take: 20
+    });
+    res.json({ reminders });
+  })
+);
+
+router.patch(
+  "/reminders/:id",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const reminderId = routeId(req.params.id);
+    await reminderForUser(userId, reminderId);
+    const input = reminderInputSchema.partial().parse(req.body);
+    await prisma.reminder.update({
+      where: { id: reminderId },
+      data: {
+        remindAt: input.remindAt ? new Date(input.remindAt) : undefined,
+        type: input.type,
+        dismissedAt:
+          input.dismissedAt === undefined ? undefined : input.dismissedAt ? new Date(input.dismissedAt) : null
+      }
+    });
+    res.json(await reminderForUser(userId, reminderId));
+  })
+);
+
+router.delete(
+  "/reminders/:id",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const reminderId = routeId(req.params.id);
+    await reminderForUser(userId, reminderId);
+    await prisma.reminder.update({
+      where: { id: reminderId },
+      data: { deletedAt: new Date() }
+    });
+    res.status(204).end();
+  })
+);
+
+router.post(
+  "/reminders/:id/dismiss",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const reminderId = routeId(req.params.id);
+    await reminderForUser(userId, reminderId);
+    await prisma.reminder.update({
+      where: { id: reminderId },
+      data: { dismissedAt: new Date() }
+    });
+    res.json(await reminderForUser(userId, reminderId));
+  })
+);
+
+router.post(
+  "/tasks/:taskId/tags/:tagId",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const task = await taskForUser(userId, routeId(req.params.taskId));
+    const tag = await tagForUser(userId, routeId(req.params.tagId));
+
+    await prisma.taskTag.upsert({
+      where: { taskId_tagId: { taskId: task.id, tagId: tag.id } },
+      update: {},
+      create: { taskId: task.id, tagId: tag.id }
+    });
+
+    res.status(201).json(await taskForUser(userId, task.id));
+  })
+);
+
+router.delete(
+  "/tasks/:taskId/tags/:tagId",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const task = await taskForUser(userId, routeId(req.params.taskId));
+    const tag = await tagForUser(userId, routeId(req.params.tagId));
+    await prisma.taskTag.deleteMany({ where: { taskId: task.id, tagId: tag.id } });
+    res.status(204).end();
+  })
+);
+
+router.get(
   "/tags",
   asyncHandler(async (req, res) => {
     const tags = await prisma.tag.findMany({
@@ -409,12 +644,19 @@ router.post(
   "/tags",
   asyncHandler(async (req, res) => {
     const userId = currentUserId(req);
-    const input = z.object({ name: z.string().min(1), color: z.string().optional(), workspaceId: z.string().uuid().optional() }).parse(req.body);
+    const input = z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1),
+        color: z.string().optional(),
+        workspaceId: z.string().uuid().optional()
+      })
+      .parse(req.body);
     const workspaceId = await workspaceIdFor(userId, input.workspaceId);
     const tag = await prisma.tag.upsert({
       where: { userId_workspaceId_name: { userId, workspaceId, name: input.name } },
       update: { color: input.color },
-      create: { userId, workspaceId, name: input.name, color: input.color }
+      create: { id: input.id, userId, workspaceId, name: input.name, color: input.color }
     });
     res.status(201).json(tag);
   })
@@ -637,8 +879,23 @@ const taskInputSchema = z.object({
   startDate: z.string().nullable().optional(),
   time: z.string().nullable().optional(),
   repeat: z.string().nullable().optional(),
+  estimatedMinutes: z.number().int().min(0).nullable().optional(),
   position: z.number().int().min(0).default(0),
   tags: z.array(z.string()).default([])
+});
+
+const subtaskInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  title: z.string().min(1),
+  completed: z.boolean().default(false),
+  position: z.number().int().min(0).default(0)
+});
+
+const reminderInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  remindAt: z.string().datetime(),
+  type: z.string().default("task"),
+  dismissedAt: z.string().datetime().nullable().optional()
 });
 
 const noteInputSchema = z.object({
@@ -680,7 +937,8 @@ async function workspaceIdFor(userId: string, preferredId?: string): Promise<str
 
 const taskInclude = {
   taskTags: { include: { tag: true } },
-  subtasks: { where: { deletedAt: null }, orderBy: { position: "asc" } }
+  subtasks: { where: { deletedAt: null }, orderBy: { position: "asc" } },
+  reminders: { where: { deletedAt: null }, orderBy: { remindAt: "asc" } }
 } satisfies Prisma.TaskInclude;
 
 async function taskForUser(userId: string, id: string) {
@@ -694,6 +952,42 @@ async function taskForUser(userId: string, id: string) {
   }
 
   return task;
+}
+
+async function subtaskForUser(userId: string, id: string) {
+  const subtask = await prisma.subtask.findFirst({
+    where: { id, userId, deletedAt: null }
+  });
+
+  if (!subtask) {
+    throw new HttpError(404, "Subtask not found");
+  }
+
+  return subtask;
+}
+
+async function reminderForUser(userId: string, id: string) {
+  const reminder = await prisma.reminder.findFirst({
+    where: { id, userId, deletedAt: null }
+  });
+
+  if (!reminder) {
+    throw new HttpError(404, "Reminder not found");
+  }
+
+  return reminder;
+}
+
+async function tagForUser(userId: string, id: string) {
+  const tag = await prisma.tag.findFirst({
+    where: { id, userId, deletedAt: null }
+  });
+
+  if (!tag) {
+    throw new HttpError(404, "Tag not found");
+  }
+
+  return tag;
 }
 
 function taskUpdateData(input: Partial<z.infer<typeof taskInputSchema>>): Prisma.TaskUncheckedUpdateInput {
@@ -718,6 +1012,7 @@ function taskUpdateData(input: Partial<z.infer<typeof taskInputSchema>>): Prisma
     startDate: input.startDate !== undefined ? (input.startDate ? new Date(input.startDate) : null) : undefined,
     time: input.time,
     repeat: input.repeat,
+    estimatedMinutes: input.estimatedMinutes,
     position: input.position
   };
 }
@@ -742,6 +1037,10 @@ async function syncTaskTags(userId: string, workspaceId: string, taskId: string,
 
 function routeId(value: string | undefined): string {
   return z.string().uuid().parse(value);
+}
+
+function formatDateOnly(value: Date | null): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
 }
 
 export default router;

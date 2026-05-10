@@ -48,6 +48,8 @@ export interface TaskDto {
   dueDate?: string | null;
   time?: string | null;
   repeat?: string | null;
+  estimatedMinutes?: number | null;
+  completedAt?: string | null;
   gameArea?: string | null;
   severity?: string | null;
   buildVersion?: string | null;
@@ -58,8 +60,49 @@ export interface TaskDto {
   updatedAt?: string;
   deletedAt?: string | null;
   tags?: string[];
-  subtasks?: unknown[];
+  subtasks?: SubtaskDto[];
+  reminders?: ReminderDto[];
   taskTags?: Array<{ tag: { name: string } }>;
+}
+
+export interface SubtaskDto {
+  id: string;
+  workspaceId?: string;
+  taskId: string;
+  title: string;
+  completed: boolean;
+  position: number;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
+export interface ReminderDto {
+  id: string;
+  workspaceId?: string;
+  taskId?: string | null;
+  habitId?: string | null;
+  type?: string;
+  remindAt: string;
+  deliveredAt?: string | null;
+  dismissedAt?: string | null;
+  updatedAt?: string;
+  deletedAt?: string | null;
+  task?: TaskDto | null;
+}
+
+export interface TagDto {
+  id: string;
+  workspaceId?: string;
+  name: string;
+  color?: string | null;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
+export interface TaskTagDto {
+  id?: string;
+  taskId: string;
+  tagId: string;
 }
 
 export interface BillingStatusResponse {
@@ -129,6 +172,7 @@ export class ZadaApiClient {
       status?: string;
       completed?: boolean;
       priority?: string;
+      type?: string;
       tag?: string;
       dueFrom?: string;
       dueTo?: string;
@@ -175,6 +219,74 @@ export class ZadaApiClient {
 
   reorderTasks(items: Array<{ id: string; position: number; columnId?: string | null }>) {
     return this.request<{ ok: boolean }>("/tasks/reorder", { method: "POST", body: { items } });
+  }
+
+  listSubtasks(taskId: string) {
+    return this.request<{ subtasks: SubtaskDto[] }>(`/tasks/${taskId}/subtasks`);
+  }
+
+  createSubtask(taskId: string, input: Partial<SubtaskDto> & { title: string }) {
+    return this.request<SubtaskDto>(`/tasks/${taskId}/subtasks`, { method: "POST", body: input });
+  }
+
+  updateSubtask(id: string, input: Partial<SubtaskDto>) {
+    return this.request<SubtaskDto>(`/subtasks/${id}`, { method: "PATCH", body: input });
+  }
+
+  deleteSubtask(id: string) {
+    return this.request<void>(`/subtasks/${id}`, { method: "DELETE" });
+  }
+
+  reorderSubtasks(items: Array<{ id: string; position: number }>) {
+    return this.request<{ ok: boolean }>("/subtasks/reorder", { method: "POST", body: { items } });
+  }
+
+  listReminders(taskId: string) {
+    return this.request<{ reminders: ReminderDto[] }>(`/tasks/${taskId}/reminders`);
+  }
+
+  createReminder(taskId: string, input: Partial<ReminderDto> & { remindAt: string }) {
+    return this.request<ReminderDto>(`/tasks/${taskId}/reminders`, { method: "POST", body: input });
+  }
+
+  updateReminder(id: string, input: Partial<ReminderDto>) {
+    return this.request<ReminderDto>(`/reminders/${id}`, { method: "PATCH", body: input });
+  }
+
+  deleteReminder(id: string) {
+    return this.request<void>(`/reminders/${id}`, { method: "DELETE" });
+  }
+
+  dismissReminder(id: string) {
+    return this.request<ReminderDto>(`/reminders/${id}/dismiss`, { method: "POST" });
+  }
+
+  listDueReminders(now?: string) {
+    return this.request<{ reminders: ReminderDto[] }>(`/reminders/due${now ? `?now=${encodeURIComponent(now)}` : ""}`);
+  }
+
+  listTags() {
+    return this.request<{ tags: TagDto[] }>("/tags");
+  }
+
+  createTag(input: { id?: string; name: string; color?: string | null; workspaceId?: string }) {
+    return this.request<TagDto>("/tags", { method: "POST", body: input });
+  }
+
+  updateTag(id: string, input: Partial<TagDto>) {
+    return this.request<TagDto>(`/tags/${id}`, { method: "PATCH", body: input });
+  }
+
+  deleteTag(id: string) {
+    return this.request<void>(`/tags/${id}`, { method: "DELETE" });
+  }
+
+  assignTaskTag(taskId: string, tagId: string) {
+    return this.request<TaskDto>(`/tasks/${taskId}/tags/${tagId}`, { method: "POST" });
+  }
+
+  removeTaskTag(taskId: string, tagId: string) {
+    return this.request<void>(`/tasks/${taskId}/tags/${tagId}`, { method: "DELETE" });
   }
 
   previewImport(source: string) {

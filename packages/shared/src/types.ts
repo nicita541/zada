@@ -18,7 +18,7 @@ export type TaskType =
   | "release"
   | "milestone";
 
-export type RepeatRule = "daily" | "weekly" | "monthly";
+export type RepeatRule = "daily" | "weekly" | "monthly" | "yearly" | "weekdays";
 
 export type SyncStatus = "local_only" | "pending" | "synced" | "error";
 

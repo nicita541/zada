@@ -24,4 +24,17 @@ describe("parseQuickAdd", () => {
     expect(parseQuickAdd("Проверить баг завтра", { now: base }).dueDate).toBe("2026-05-10");
     expect(parseQuickAdd("Написать GDD послезавтра", { now: base }).dueDate).toBe("2026-05-11");
   });
+
+  it("parses repeat phrases and repeat tokens", () => {
+    expect(parseQuickAdd("Standup every day p2")).toMatchObject({
+      title: "Standup",
+      repeat: "daily",
+      priority: "p2"
+    });
+
+    expect(parseQuickAdd("Plan build repeat:weekdays")).toMatchObject({
+      title: "Plan build",
+      repeat: "weekdays"
+    });
+  });
 });
