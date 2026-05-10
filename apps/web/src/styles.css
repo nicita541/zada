@@ -1057,6 +1057,16 @@ section {
   font-size: 13px;
 }
 
+.empty-state {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
 .reminder-banner {
   display: flex;
   align-items: center;

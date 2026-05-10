@@ -2,14 +2,17 @@ import { create } from "zustand";
 import type { AuthResponse, BoardColumnDto, ProjectDto, ReminderDto, SubtaskDto, TagDto, TaskDto } from "@zada/api-client";
 import {
   createSyncQueueItem,
+  boardColumnKindOrder,
+  dedupeBoardColumns,
   defaultBoardColumnsForProject,
   defaultNoteSyncSettings,
+  inferBoardColumnKind,
+  missingDefaultBoardColumns,
   getNextDueDate,
   moveBoardTask,
   nextNoteSyncStatus,
   parseQuickAdd,
   parseTaskOutline,
-  shouldCreateDefaultColumns,
   type BoardColumnTemplate,
   type LocalNoteDraft,
   type NoteSyncSettings,
@@ -72,8 +75,8 @@ interface AppState {
   uncompleteTask: (id: string) => Promise<void>;
   loadProjectColumns: (projectId: string) => Promise<void>;
   ensureDefaultColumns: (projectId: string, template?: BoardColumnTemplate[]) => Promise<LocalBoardColumn[]>;
-  createColumn: (projectId: string, input: { name: string; color?: string | null }) => Promise<LocalBoardColumn | null>;
-  updateColumn: (columnId: string, input: Partial<Pick<LocalBoardColumn, "name" | "color" | "position">>) => Promise<void>;
+  createColumn: (projectId: string, input: { name: string; kind?: string | null; color?: string | null }) => Promise<LocalBoardColumn | null>;
+  updateColumn: (columnId: string, input: Partial<Pick<LocalBoardColumn, "name" | "kind" | "color" | "position">>) => Promise<void>;
   deleteColumn: (columnId: string) => Promise<void>;
   reorderColumns: (projectId: string, orderedColumnIds: string[]) => Promise<void>;
   moveTask: (taskId: string, targetColumnId: string | null, targetPosition: number) => Promise<void>;
@@ -283,13 +286,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       subscription: (subscription?.snapshot as SubscriptionSnapshot | undefined) ?? defaultSubscription
     });
 
+    for (const project of localProjects) {
+      await get().ensureDefaultColumns(project.id);
+    }
+
     if (!getAccessToken() && !getRefreshToken()) {
       set({ authStatus: "unauthenticated", currentUser: null });
       return;
     }
 
     try {
-      await loadRemoteWorkspace(set);
+      await loadRemoteWorkspace(set, get);
     } catch (error) {
       clearTokens();
       set({
@@ -304,7 +311,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const response = await api.login(input);
       persistTokens(response);
-      await loadRemoteWorkspace(set, response.user);
+      await loadRemoteWorkspace(set, get, response.user);
     } catch (error) {
       set({ authStatus: "unauthenticated", authError: error instanceof Error ? error.message : null });
       throw error;
@@ -315,7 +322,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const response = await api.register(input);
       persistTokens(response);
-      await loadRemoteWorkspace(set, response.user);
+      await loadRemoteWorkspace(set, get, response.user);
     } catch (error) {
       set({ authStatus: "unauthenticated", authError: error instanceof Error ? error.message : null });
       throw error;
@@ -511,7 +518,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...input,
       status,
       completed: input.completed ?? status === "done",
-      tags: input.tags ?? existing.tags,
+      tags: input.tags ? uniqueTagNames(input.tags) : existing.tags,
       updatedAt: now()
     };
 
@@ -566,6 +573,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadProjectColumns: async (projectId) => {
     const localColumns = (await db.board_columns.where("projectId").equals(projectId).toArray()).filter((column) => !column.deletedAt);
     set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(localColumns) } });
+    await dedupeProjectColumns(projectId, set, get);
 
     if (canReachApi()) {
       try {
@@ -573,8 +581,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         const remoteColumns = columns.map(normalizeBoardColumn);
         await db.board_columns.bulkPut(remoteColumns);
         set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(remoteColumns) } });
+        const normalizedRemoteColumns = await dedupeProjectColumns(projectId, set, get);
 
-        if (remoteColumns.length === 0) {
+        if (normalizedRemoteColumns.length === 0) {
           await get().ensureDefaultColumns(projectId);
         }
         return;
@@ -583,35 +592,48 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
 
-    if (localColumns.length === 0) {
+    if ((get().columnsByProjectId[projectId] ?? []).length === 0) {
       await get().ensureDefaultColumns(projectId);
     }
   },
   ensureDefaultColumns: async (projectId, template) => {
-    const currentColumns =
-      get().columnsByProjectId[projectId] ??
-      (await db.board_columns.where("projectId").equals(projectId).toArray()).filter((column) => !column.deletedAt);
-    if (!shouldCreateDefaultColumns(currentColumns)) {
+    const project = get().projects.find((candidate) => candidate.id === projectId);
+    const currentColumns = await dedupeProjectColumns(projectId, set, get);
+    const templateColumns = template ?? defaultBoardColumnsForProject(project?.type);
+    const missingColumns = currentColumns.length === 0 ? missingDefaultBoardColumns(currentColumns, templateColumns) : [];
+    if (missingColumns.length === 0) {
       return sortColumns(currentColumns);
     }
 
-    const project = get().projects.find((candidate) => candidate.id === projectId);
     const createdAt = now();
-    const columns = (template ?? defaultBoardColumnsForProject(project?.type)).map<LocalBoardColumn>((column, position) => ({
+    const nextPosition = currentColumns.length;
+    const draftColumns = missingColumns.map<LocalBoardColumn>((column, index) => ({
       id: crypto.randomUUID(),
       workspaceId: project?.workspaceId ?? null,
       projectId,
       name: column.name,
+      kind: column.kind,
       color: column.color ?? null,
-      position,
+      position: nextPosition + index,
       updatedAt: createdAt
     }));
+    const orderedColumns = sortColumnsByDefaultOrder([...currentColumns, ...draftColumns], createdAt);
+    const createdIds = new Set(draftColumns.map((column) => column.id));
+    const currentById = new Map(currentColumns.map((column) => [column.id, column]));
+    const columns = orderedColumns.filter((column) => createdIds.has(column.id));
+    const reorderedColumns = orderedColumns.filter((column) => {
+      const original = currentById.get(column.id);
+      return original && (original.position !== column.position || original.kind !== column.kind);
+    });
 
     await db.transaction("rw", db.board_columns, db.sync_queue, async () => {
-      await db.board_columns.bulkPut(columns);
-      await db.sync_queue.bulkPut(columns.map((column) => createSyncQueueItem("board_column", column.id, "create", column)));
+      await db.board_columns.bulkPut([...columns, ...reorderedColumns]);
+      await db.sync_queue.bulkPut([
+        ...columns.map((column) => createSyncQueueItem("board_column", column.id, "create", column)),
+        ...reorderedColumns.map((column) => createSyncQueueItem("board_column", column.id, "update", column))
+      ]);
     });
-    set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: columns } });
+    set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: orderedColumns } });
 
     if (canReachApi()) {
       try {
@@ -620,6 +642,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             api.createColumn(projectId, {
               id: column.id,
               name: column.name,
+              kind: column.kind,
               color: column.color,
               position: column.position
             })
@@ -628,14 +651,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         const normalizedColumns = savedColumns.map(normalizeBoardColumn);
         await db.board_columns.bulkPut(normalizedColumns);
         await Promise.all(normalizedColumns.map((column) => clearQueuedEntity("board_column", column.id)));
-        set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(normalizedColumns) } });
-        return sortColumns(normalizedColumns);
+        const savedById = new Map(normalizedColumns.map((column) => [column.id, column]));
+        const savedAllColumns = orderedColumns.map((column) => savedById.get(column.id) ?? column);
+        set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: savedAllColumns } });
+        return savedAllColumns;
       } catch {
         set({ syncState: "error" });
       }
     }
 
-    return columns;
+    return orderedColumns;
   },
   createColumn: async (projectId, input) => {
     const name = input.name.trim();
@@ -650,6 +675,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       workspaceId: project.workspaceId ?? null,
       projectId,
       name,
+      kind: input.kind ?? "custom",
       color: input.color ?? null,
       position: existing.length,
       updatedAt: now()
@@ -667,6 +693,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           await api.createColumn(projectId, {
             id: column.id,
             name: column.name,
+            kind: column.kind,
             color: column.color,
             position: column.position
           })
@@ -696,6 +723,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updated: LocalBoardColumn = {
       ...existing,
       name,
+      kind: inferBoardColumnKind(name, input.kind ?? existing.kind),
       color: input.color === undefined ? existing.color : input.color,
       position: input.position ?? existing.position,
       updatedAt: now()
@@ -712,6 +740,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const saved = normalizeBoardColumn(
           await api.updateColumn(columnId, {
             name: updated.name,
+            kind: updated.kind,
             color: updated.color,
             position: updated.position
           })
@@ -1191,7 +1220,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       startDate: parsed.startDate,
       time: parsed.time,
       repeat: parsed.repeat,
-      tags: parsed.tags
+      tags: uniqueTagNames(parsed.tags)
     });
   },
   toggleTask: async (id) => {
@@ -1221,7 +1250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       priority: item.priority,
       dueDate: item.dueDate,
       completed: item.completed,
-      tags: item.tags,
+      tags: uniqueTagNames(item.tags),
       position,
       updatedAt: now()
     }));
@@ -1301,8 +1330,72 @@ function clearTokens() {
   localStorage.removeItem(refreshTokenKey);
 }
 
+async function dedupeProjectColumns(
+  projectId: string,
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState
+): Promise<LocalBoardColumn[]> {
+  const rawColumns = (await db.board_columns.where("projectId").equals(projectId).toArray()).filter((column) => !column.deletedAt);
+  const projectTasks = get().tasks.filter((task) => task.projectId === projectId && !task.deletedAt);
+  const deduped = dedupeBoardColumns(rawColumns, projectTasks);
+  const timestamp = now();
+  const originalById = new Map(rawColumns.map((column) => [column.id, column]));
+  const columns = deduped.columns.map<LocalBoardColumn>((column) => {
+    const original = originalById.get(column.id);
+    const kind = inferBoardColumnKind(column.name, column.kind);
+    const changed = !original || original.kind !== kind || original.position !== column.position;
+    return { ...column, kind, updatedAt: changed ? timestamp : column.updatedAt };
+  });
+  const changedColumns = columns.filter((column) => {
+    const original = originalById.get(column.id);
+    return !original || original.kind !== column.kind || original.position !== column.position;
+  });
+  const deletedColumns = deduped.duplicateColumnIds
+    .map((id) => originalById.get(id))
+    .filter((column): column is LocalBoardColumn => Boolean(column))
+    .map<LocalBoardColumn>((column) => ({ ...column, deletedAt: timestamp, updatedAt: timestamp }));
+  const taskById = new Map(projectTasks.map((task) => [task.id, task]));
+  const movedTasks = deduped.taskMoves.flatMap<LocalTask>((move) => {
+    const task = taskById.get(move.taskId);
+    if (!task || (task.columnId === move.columnId && (task.position ?? 0) === move.position)) {
+      return [];
+    }
+    return [{ ...task, columnId: move.columnId, position: move.position, updatedAt: timestamp }];
+  });
+
+  if (changedColumns.length > 0 || deletedColumns.length > 0 || movedTasks.length > 0) {
+    await db.transaction("rw", db.board_columns, db.tasks, db.sync_queue, async () => {
+      if (changedColumns.length > 0 || deletedColumns.length > 0) {
+        await db.board_columns.bulkPut([...changedColumns, ...deletedColumns]);
+      }
+      if (movedTasks.length > 0) {
+        await db.tasks.bulkPut(movedTasks);
+      }
+      await db.sync_queue.bulkPut([
+        ...changedColumns.map((column) => createSyncQueueItem("board_column", column.id, "update", column)),
+        ...deletedColumns.map((column) => createSyncQueueItem("board_column", column.id, "delete", { id: column.id, deletedAt: timestamp })),
+        ...movedTasks.map((task) =>
+          createSyncQueueItem("task", task.id, "move", {
+            projectId,
+            columnId: task.columnId ?? null,
+            position: task.position ?? 0
+          })
+        )
+      ]);
+    });
+  }
+
+  set({
+    columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(columns) },
+    tasks: movedTasks.length > 0 ? replaceManyById(get().tasks, movedTasks) : get().tasks
+  });
+
+  return sortColumns(columns);
+}
+
 async function loadRemoteWorkspace(
   set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
   knownUser?: AuthUser
 ) {
   const user = knownUser ?? (await currentUserWithRefresh()).user;
@@ -1358,6 +1451,10 @@ async function loadRemoteWorkspace(
     remindersByTaskId: groupReminders(normalizedReminders),
     dueReminders: dueLocalReminders(normalizedReminders)
   });
+
+  for (const project of normalizedProjects) {
+    await get().ensureDefaultColumns(project.id);
+  }
 }
 
 async function currentUserWithRefresh() {
@@ -1394,6 +1491,7 @@ function normalizeBoardColumn(column: BoardColumnDto): LocalBoardColumn {
     workspaceId: column.workspaceId,
     projectId: column.projectId,
     name: column.name,
+    kind: inferBoardColumnKind(column.name, column.kind),
     color: column.color ?? null,
     position: column.position ?? 0,
     updatedAt: column.updatedAt ?? now(),
@@ -1402,7 +1500,7 @@ function normalizeBoardColumn(column: BoardColumnDto): LocalBoardColumn {
 }
 
 function normalizeTask(task: TaskDto): LocalTask {
-  const tags = task.tags ?? task.taskTags?.map((taskTag) => taskTag.tag.name) ?? [];
+  const tags = uniqueTagNames(task.tags ?? task.taskTags?.map((taskTag) => taskTag.tag.name) ?? []);
   const status = task.status ?? "todo";
 
   return {
@@ -1491,7 +1589,7 @@ function localTaskFromDraft(input: TaskDraft, activeProjectId: string | null): L
     repeat: input.repeat ?? null,
     estimatedMinutes: input.estimatedMinutes ?? null,
     completed: false,
-    tags: input.tags ?? [],
+    tags: uniqueTagNames(input.tags ?? []),
     gameArea: input.gameArea ?? null,
     severity: input.severity ?? null,
     buildVersion: input.buildVersion ?? null,
@@ -1527,7 +1625,7 @@ function taskPayload(task: LocalTask): Partial<TaskDto> & { title: string } {
     expectedResult: task.expectedResult,
     actualResult: task.actualResult,
     position: task.position,
-    tags: task.tags
+    tags: uniqueTagNames(task.tags)
   };
 }
 
@@ -1576,6 +1674,20 @@ function dateOnly(value: string | null | undefined) {
   return value ? value.slice(0, 10) : null;
 }
 
+function uniqueTagNames(tags: string[]) {
+  const seen = new Set<string>();
+  return tags
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (!tag || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+}
+
 function replaceById<T extends { id: string }>(items: T[], next: T) {
   return items.map((item) => (item.id === next.id ? next : item));
 }
@@ -1593,6 +1705,25 @@ function replaceManyById<T extends { id: string }>(items: T[], nextItems: T[]) {
 
 function sortColumns(columns: LocalBoardColumn[]) {
   return [...columns].sort((left, right) => left.position - right.position || left.name.localeCompare(right.name));
+}
+
+function sortColumnsByDefaultOrder(columns: LocalBoardColumn[], updatedAt: string) {
+  return [...columns]
+    .sort((left, right) => {
+      const leftKind = inferBoardColumnKind(left.name, left.kind);
+      const rightKind = inferBoardColumnKind(right.name, right.kind);
+      return (
+        boardColumnKindOrder(leftKind) - boardColumnKindOrder(rightKind) ||
+        left.position - right.position ||
+        left.name.localeCompare(right.name)
+      );
+    })
+    .map((column, position) => ({
+      ...column,
+      kind: inferBoardColumnKind(column.name, column.kind),
+      position,
+      updatedAt: column.position === position && column.kind ? column.updatedAt : updatedAt
+    }));
 }
 
 function groupColumns(columns: LocalBoardColumn[]) {

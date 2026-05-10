@@ -28,6 +28,7 @@ export interface LocalBoardColumn {
   workspaceId?: string | null;
   projectId: string;
   name: string;
+  kind?: string | null;
   color?: string | null;
   position: number;
   updatedAt: string;
@@ -184,6 +185,26 @@ export class ZadaLocalDatabase extends Dexie {
     this.version(4).stores({
       projects: "id, workspaceId, updatedAt",
       board_columns: "id, userId, workspaceId, projectId, position, updatedAt, deletedAt",
+      tasks: "id, projectId, columnId, completed, status, type, priority, dueDate, position, updatedAt",
+      tags: "id, workspaceId, name, updatedAt, deletedAt",
+      task_tags: "id, taskId, tagId, updatedAt, deletedAt",
+      subtasks: "id, taskId, completed, position, updatedAt, deletedAt",
+      reminders: "id, taskId, type, remindAt, dismissedAt, updatedAt, deletedAt",
+      habits: "id, workspaceId, updatedAt",
+      habit_logs: "id, habitId, loggedFor, updatedAt",
+      notes: "id, syncStatus, updatedAt",
+      references: "id, workspaceId, projectId, updatedAt",
+      code_snippets: "id, workspaceId, projectId, language, updatedAt",
+      milestones: "id, workspaceId, projectId, updatedAt",
+      focus_sessions: "id, taskId, startedAt, updatedAt",
+      sync_queue: "id, entityType, entityId, createdAt",
+      sync_meta: "id, updatedAt",
+      subscription_cache: "id, updatedAt",
+      note_sync_settings: "id"
+    });
+    this.version(5).stores({
+      projects: "id, workspaceId, updatedAt",
+      board_columns: "id, userId, workspaceId, projectId, kind, position, updatedAt, deletedAt",
       tasks: "id, projectId, columnId, completed, status, type, priority, dueDate, position, updatedAt",
       tags: "id, workspaceId, name, updatedAt, deletedAt",
       task_tags: "id, taskId, tagId, updatedAt, deletedAt",

@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { Bell, CheckSquare, GripVertical, Plus, Repeat2, Trash2 } from "lucide-react";
 import { Badge, Button } from "@zada/ui";
-import { effectiveTaskColumnId } from "@zada/shared";
+import { effectiveTaskColumnId, inferBoardColumnKind } from "@zada/shared";
 import type { LocalBoardColumn, LocalReminder, LocalSubtask, LocalTask } from "../../lib/db";
 import { useI18n, type TranslationKey } from "../../i18n";
 import { useAppStore } from "../../store/appStore";
@@ -141,7 +141,7 @@ export function BoardView({ projectId }: { projectId: string }) {
           </div>
         </SortableContext>
       </DndContext>
-      {columns.length === 0 && projectTasks.length > 0 ? <div className="inline-alert">{t("board.noTasks")}</div> : null}
+      {columns.length === 0 && projectTasks.length > 0 ? <div className="empty-state">{t("board.noTasks")}</div> : null}
     </div>
   );
 }
@@ -163,7 +163,7 @@ function BoardColumn({
   onAddTask: (column: LocalBoardColumn, title: string) => Promise<void>;
   onDeleteColumn: (columnId: string) => Promise<void>;
   onOpenTask: (taskId: string) => void;
-  onUpdateColumn: (columnId: string, input: Partial<Pick<LocalBoardColumn, "name" | "color" | "position">>) => Promise<void>;
+  onUpdateColumn: (columnId: string, input: Partial<Pick<LocalBoardColumn, "name" | "kind" | "color" | "position">>) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [name, setName] = useState(column.name);
@@ -178,8 +178,8 @@ function BoardColumn({
   };
 
   useEffect(() => {
-    setName(localizedColumnName(t, column.name));
-  }, [column.name, t]);
+    setName(localizedColumnName(t, column));
+  }, [column.kind, column.name, t]);
 
   async function submitTask(event: FormEvent) {
     event.preventDefault();
@@ -193,7 +193,7 @@ function BoardColumn({
 
   async function commitName() {
     const trimmed = name.trim();
-    const displayName = localizedColumnName(t, column.name);
+    const displayName = localizedColumnName(t, column);
     if (trimmed && trimmed !== column.name && trimmed !== displayName) {
       await onUpdateColumn(column.id, { name: trimmed });
     } else {
@@ -366,16 +366,19 @@ function dynamicLabel(t: (key: TranslationKey) => string, key: string, fallback:
   return translated === key ? fallback : translated;
 }
 
-function localizedColumnName(t: (key: TranslationKey) => string, name: string): string {
-  const keyByName: Record<string, TranslationKey> = {
-    ideas: "projects.columns.ideas",
+function localizedColumnName(t: (key: TranslationKey) => string, column: LocalBoardColumn): string {
+  const kind = inferBoardColumnKind(column.name, column.kind);
+  const keyByKind: Partial<Record<string, TranslationKey>> = {
     backlog: "projects.columns.backlog",
     todo: "projects.columns.todo",
-    "in progress": "projects.columns.inProgress",
+    in_progress: "projects.columns.inProgress",
     review: "projects.columns.review",
-    testing: "projects.columns.testing",
     done: "projects.columns.done"
   };
-  const key = keyByName[name.trim().toLowerCase()];
-  return key ? t(key) : name;
+  const keyByName: Record<string, TranslationKey> = {
+    ideas: "projects.columns.ideas",
+    testing: "projects.columns.testing"
+  };
+  const key = keyByKind[kind] ?? keyByName[column.name.trim().toLowerCase()];
+  return key ? t(key) : column.name;
 }

@@ -87,6 +87,7 @@ model BoardColumn {
   workspaceId  String    @map("workspace_id") @db.Uuid
   projectId    String    @map("project_id") @db.Uuid
   name         String
+  kind         String    @default("custom")
   color        String?
   position     Int
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -98,6 +99,7 @@ model BoardColumn {
   tasks   Task[]
 
   @@index([userId, workspaceId, projectId])
+  @@index([userId, workspaceId, projectId, kind])
   @@map("board_columns")
 }
 

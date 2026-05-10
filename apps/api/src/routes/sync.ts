@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Prisma } from "@prisma/client";
+import { inferBoardColumnKind } from "@zada/shared";
 import { z } from "zod";
 import { currentUserId, requireAuth } from "../auth/middleware";
 import { asyncHandler, HttpError } from "../http";
@@ -180,6 +181,7 @@ const boardColumnPayloadSchema = z
   .object({
     projectId: z.string().uuid(),
     name: z.string().min(1),
+    kind: z.enum(["backlog", "todo", "in_progress", "review", "done", "custom"]).optional(),
     color: z.string().nullable().optional(),
     position: z.number().int().min(0).optional(),
     workspaceId: z.string().uuid().nullable().optional()
@@ -392,12 +394,14 @@ async function applyBoardColumnChange(userId: string, change: SyncChange) {
       workspaceId: project.workspaceId,
       projectId: project.id,
       name: payload.name,
+      kind: inferBoardColumnKind(payload.name, payload.kind),
       color: payload.color ?? null,
       position: payload.position ?? 0,
       deletedAt: null
     },
     update: {
       name: payload.name,
+      kind: inferBoardColumnKind(payload.name, payload.kind),
       color: payload.color ?? null,
       position: payload.position ?? 0,
       deletedAt: null
@@ -637,17 +641,29 @@ async function workspaceIdFor(userId: string, preferredId?: string | null): Prom
 }
 
 async function syncTaskTags(userId: string, workspaceId: string, taskId: string, rawTags: string[]) {
-  const tags = Array.from(new Set(rawTags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 20);
+  const seen = new Set<string>();
+  const tags = rawTags
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (!tag || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
 
   await prisma.$transaction(async (tx) => {
     await tx.taskTag.deleteMany({ where: { taskId } });
 
     for (const name of tags) {
-      const tag = await tx.tag.upsert({
-        where: { userId_workspaceId_name: { userId, workspaceId, name } },
-        update: { deletedAt: null },
-        create: { userId, workspaceId, name }
+      const existing = await tx.tag.findFirst({
+        where: { userId, workspaceId, name: { equals: name, mode: "insensitive" } }
       });
+      const tag = existing
+        ? await tx.tag.update({ where: { id: existing.id }, data: { deletedAt: null } })
+        : await tx.tag.create({ data: { userId, workspaceId, name } });
 
       await tx.taskTag.create({ data: { taskId, tagId: tag.id } });
     }

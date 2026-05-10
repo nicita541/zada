@@ -39,6 +39,7 @@ export interface BoardColumnDto {
   workspaceId?: string;
   projectId: string;
   name: string;
+  kind?: "backlog" | "todo" | "in_progress" | "review" | "done" | "custom" | string | null;
   color?: string | null;
   position: number;
   updatedAt?: string;
@@ -243,11 +244,11 @@ export class ZadaApiClient {
     return this.request<{ columns: BoardColumnDto[] }>(`/projects/${projectId}/columns`);
   }
 
-  createColumn(projectId: string, input: { id?: string; name: string; color?: string | null; position?: number }) {
+  createColumn(projectId: string, input: { id?: string; name: string; kind?: BoardColumnDto["kind"]; color?: string | null; position?: number }) {
     return this.request<BoardColumnDto>(`/projects/${projectId}/columns`, { method: "POST", body: input });
   }
 
-  updateColumn(id: string, input: Partial<Pick<BoardColumnDto, "name" | "color" | "position">>) {
+  updateColumn(id: string, input: Partial<Pick<BoardColumnDto, "name" | "kind" | "color" | "position">>) {
     return this.request<BoardColumnDto>(`/columns/${id}`, { method: "PATCH", body: input });
   }
 

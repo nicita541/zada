@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { defaultBoardColumnsForProject, getNextDueDate } from "@zada/shared";
+import { defaultBoardColumnsForProject, getNextDueDate, inferBoardColumnKind } from "@zada/shared";
 import { Router } from "express";
 import { z } from "zod";
 import { currentUserId, requireAuth } from "../auth/middleware";
@@ -15,7 +15,7 @@ router.get(
     const projects = await prisma.project.findMany({
       where: { userId: currentUserId(req), deletedAt: null },
       orderBy: { updatedAt: "desc" },
-      include: { columns: { orderBy: { position: "asc" } } }
+      include: { columns: { where: { deletedAt: null }, orderBy: { position: "asc" } } }
     });
     res.json({ projects });
   })
@@ -49,12 +49,13 @@ router.post(
             userId,
             workspaceId,
             name: column.name,
+            kind: column.kind,
             color: column.color,
             position
           }))
         }
       },
-      include: { columns: { orderBy: { position: "asc" } } }
+      include: { columns: { where: { deletedAt: null }, orderBy: { position: "asc" } } }
     });
 
     res.status(201).json(project);
@@ -68,7 +69,7 @@ router.get(
     const project = await prisma.project.findFirst({
       where: { id: projectId, userId: currentUserId(req), deletedAt: null },
       include: {
-        columns: { orderBy: { position: "asc" } },
+        columns: { where: { deletedAt: null }, orderBy: { position: "asc" } },
         tasks: { where: { deletedAt: null }, orderBy: [{ position: "asc" }, { updatedAt: "desc" }] }
       }
     });
@@ -126,6 +127,7 @@ router.post(
       .object({
         projectId: z.string().uuid(),
         name: z.string().min(1),
+        kind: boardColumnKindSchema.optional(),
         color: z.string().nullable().optional(),
         position: z.number().int().default(0),
         workspaceId: z.string().uuid().optional()
@@ -139,6 +141,7 @@ router.post(
         workspaceId: project.workspaceId,
         projectId: project.id,
         name: input.name,
+        kind: inferBoardColumnKind(input.name, input.kind),
         color: input.color ?? null,
         position: input.position
       }
@@ -173,6 +176,7 @@ router.post(
         workspaceId: project.workspaceId,
         projectId: project.id,
         name: input.name,
+        kind: inferBoardColumnKind(input.name, input.kind),
         color: input.color ?? null,
         position: input.position
       }
@@ -227,10 +231,12 @@ router.patch(
     const userId = currentUserId(req);
     const column = await columnForUser(userId, routeId(req.params.id));
     const input = columnInputSchema.partial().parse(req.body);
+    const name = input.name ?? column.name;
     const updated = await prisma.boardColumn.update({
       where: { id: column.id },
       data: {
         name: input.name,
+        kind: input.name !== undefined || input.kind !== undefined ? inferBoardColumnKind(name, input.kind ?? column.kind) : undefined,
         color: input.color,
         position: input.position
       }
@@ -826,11 +832,12 @@ router.post(
       })
       .parse(req.body);
     const workspaceId = await workspaceIdFor(userId, input.workspaceId);
-    const tag = await prisma.tag.upsert({
-      where: { userId_workspaceId_name: { userId, workspaceId, name: input.name } },
-      update: { color: input.color },
-      create: { id: input.id, userId, workspaceId, name: input.name, color: input.color }
+    const existing = await prisma.tag.findFirst({
+      where: { userId, workspaceId, name: { equals: input.name, mode: "insensitive" } }
     });
+    const tag = existing
+      ? await prisma.tag.update({ where: { id: existing.id }, data: { color: input.color, deletedAt: null } })
+      : await prisma.tag.create({ data: { id: input.id, userId, workspaceId, name: input.name, color: input.color } });
     res.status(201).json(tag);
   })
 );
@@ -1029,6 +1036,8 @@ router.post(
   })
 );
 
+const boardColumnKindSchema = z.enum(["backlog", "todo", "in_progress", "review", "done", "custom"]);
+
 const taskInputSchema = z.object({
   id: z.string().uuid().optional(),
   title: z.string().min(1),
@@ -1060,6 +1069,7 @@ const taskInputSchema = z.object({
 const columnInputSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1),
+  kind: boardColumnKindSchema.optional(),
   color: z.string().nullable().optional(),
   position: z.number().int().min(0).default(0)
 });
@@ -1160,7 +1170,7 @@ async function projectForUser(userId: string, id: string) {
 async function columnForUser(userId: string, id: string) {
   const column = await prisma.boardColumn.findFirst({
     where: { id, userId, deletedAt: null },
-    select: { id: true, workspaceId: true, projectId: true }
+    select: { id: true, workspaceId: true, projectId: true, name: true, kind: true }
   });
 
   if (!column) {
@@ -1234,17 +1244,29 @@ function taskUpdateData(input: Partial<z.infer<typeof taskInputSchema>>): Prisma
 }
 
 async function syncTaskTags(userId: string, workspaceId: string, taskId: string, rawTags: string[]) {
-  const tags = Array.from(new Set(rawTags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 20);
+  const seen = new Set<string>();
+  const tags = rawTags
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (!tag || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
 
   await prisma.$transaction(async (tx) => {
     await tx.taskTag.deleteMany({ where: { taskId } });
 
     for (const name of tags) {
-      const tag = await tx.tag.upsert({
-        where: { userId_workspaceId_name: { userId, workspaceId, name } },
-        update: { deletedAt: null },
-        create: { userId, workspaceId, name }
+      const existing = await tx.tag.findFirst({
+        where: { userId, workspaceId, name: { equals: name, mode: "insensitive" } }
       });
+      const tag = existing
+        ? await tx.tag.update({ where: { id: existing.id }, data: { deletedAt: null } })
+        : await tx.tag.create({ data: { userId, workspaceId, name } });
 
       await tx.taskTag.create({ data: { taskId, tagId: tag.id } });
     }

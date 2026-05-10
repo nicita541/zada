@@ -47,7 +47,7 @@ import { Badge, Button, Panel } from "@zada/ui";
 import { canUseFeatureOffline, gameDevTemplate, parseInternalLinks, premiumFeatures } from "@zada/shared";
 import { BoardView } from "./components/board/BoardView";
 import { useAppStore, type ViewId } from "./store/appStore";
-import type { LocalReminder, LocalSubtask, LocalTask } from "./lib/db";
+import type { LocalProject, LocalReminder, LocalSubtask, LocalTask } from "./lib/db";
 import { I18nProvider, useI18n, type Locale, type TranslationKey } from "./i18n";
 
 const navItems: Array<{ id: ViewId; labelKey: TranslationKey; icon: ReactNode }> = [
@@ -257,7 +257,7 @@ function TodayView() {
   const setTaskFilters = useAppStore((state) => state.setTaskFilters);
   const clearTaskFilters = useAppStore((state) => state.clearTaskFilters);
   const completedCount = tasks.filter((task) => task.completed).length;
-  const visibleTasks = filterTasks(tasks, searchQuery, taskFilters);
+  const visibleTasks = filterTasks(tasks, projects, searchQuery, taskFilters);
   const openTasks = visibleTasks.filter((task) => !task.completed);
   const todayGroups = groupTodayTasks(visibleTasks);
   const upcomingGroups = groupUpcomingTasks(visibleTasks);
@@ -276,7 +276,7 @@ function TodayView() {
           subtasksByTaskId={subtasksByTaskId}
           remindersByTaskId={remindersByTaskId}
         />
-        {visibleTasks.length === 0 ? <div className="inline-alert">{t("today.noTasks")}</div> : null}
+        {visibleTasks.length === 0 ? <div className="empty-state">{t("today.noTasks")}</div> : null}
       </section>
 
       <aside className="page-side">
@@ -468,7 +468,7 @@ function UpcomingList({ groups }: { groups: { nextSeven: LocalTask[]; later: Loc
   ];
 
   if (groups.nextSeven.length === 0 && groups.later.length === 0) {
-    return <div className="inline-alert">{t("today.noUpcoming")}</div>;
+    return <div className="empty-state">{t("today.noUpcoming")}</div>;
   }
 
   return (
@@ -592,7 +592,7 @@ function ProjectsView() {
           </Button>
         </form>
         {projectFormMessage ? <div className="form-message">{projectFormMessage}</div> : null}
-        {projects.length === 0 ? <div className="inline-alert">{t("projects.empty")}</div> : null}
+        {projects.length === 0 ? <div className="empty-state">{t("projects.empty")}</div> : null}
         <div className="project-grid">
           {projects.map((project, index) => {
             const count = tasks.filter((task) => task.projectId === project.id).length;
@@ -636,7 +636,7 @@ function ProjectsView() {
                     reminders={remindersByTaskId[task.id] ?? []}
                   />
                 ))}
-                {projectTasks.length === 0 ? <div className="inline-alert">{t("today.noTasks")}</div> : null}
+                {projectTasks.length === 0 ? <div className="empty-state">{t("today.noTasks")}</div> : null}
               </div>
             )}
           </>
@@ -1629,7 +1629,7 @@ function TaskDetailModal() {
               ))}
             </div>
           ) : (
-            <div className="inline-alert">{t("taskDetail.emptySubtasks")}</div>
+            <div className="empty-state">{t("taskDetail.emptySubtasks")}</div>
           )}
           <form className="inline-form" onSubmit={submitSubtask}>
             <input
@@ -1658,7 +1658,7 @@ function TaskDetailModal() {
               ))}
             </div>
           ) : (
-            <div className="inline-alert">{t("taskDetail.emptyReminders")}</div>
+            <div className="empty-state">{t("taskDetail.emptyReminders")}</div>
           )}
           <form className="inline-form" onSubmit={submitReminder}>
             <input
@@ -1704,7 +1704,7 @@ function TaskDetailModal() {
               );
             })}
           </div>
-          {tags.length === 0 ? <div className="inline-alert">{t("taskDetail.emptyTags")}</div> : null}
+          {tags.length === 0 ? <div className="empty-state">{t("taskDetail.emptyTags")}</div> : null}
           <form className="inline-form" onSubmit={submitTag}>
             <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder={t("taskDetail.tagPlaceholder")} />
             <Button type="submit">
@@ -1863,8 +1863,14 @@ function featureLabel(t: TFunction, featureKey: string): string {
   return dynamicLabel(t, `subscription.features.${featureKey}`, premiumFeatures[featureKey as keyof typeof premiumFeatures]?.label ?? featureKey);
 }
 
-function filterTasks(tasks: LocalTask[], searchQuery: string, filters: ReturnType<typeof useAppStore.getState>["taskFilters"]) {
+function filterTasks(
+  tasks: LocalTask[],
+  projects: LocalProject[],
+  searchQuery: string,
+  filters: ReturnType<typeof useAppStore.getState>["taskFilters"]
+) {
   const query = searchQuery.trim().toLowerCase();
+  const projectById = new Map(projects.map((project) => [project.id, project]));
   return tasks.filter((task) => {
     if (filters.projectId && task.projectId !== filters.projectId) {
       return false;
@@ -1888,7 +1894,7 @@ function filterTasks(tasks: LocalTask[], searchQuery: string, filters: ReturnTyp
       return true;
     }
 
-    return [task.title, task.description, task.gameArea, task.buildVersion, ...task.tags]
+    return [task.title, task.description, projectById.get(task.projectId ?? "")?.name, task.gameArea, task.buildVersion, ...task.tags]
       .filter(Boolean)
       .join(" ")
       .toLowerCase()
