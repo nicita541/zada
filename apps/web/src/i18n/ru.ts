@@ -75,7 +75,7 @@ export const ru = {
   },
   today: {
     metaOpenTasks: "{count} открытых задач",
-    quickAddPlaceholder: "Добавить задачу #тег p1 due:2026-05-10 [bug]",
+    quickAddPlaceholder: "Добавить задачу: \"исправить баг завтра p1 #bug\"",
     toggleComplete: "Отметить выполнение",
     openTask: "Открыть задачу",
     dailyLoad: "Нагрузка дня",
@@ -368,6 +368,6 @@ export const ru = {
     offline: "Офлайн",
     idle: "Ожидание",
     syncing: "Синхронизация",
-    error: "Ошибка"
+    error: "Нужна проверка"
   }
 } satisfies TranslationDictionary;

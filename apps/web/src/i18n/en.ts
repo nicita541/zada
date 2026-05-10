@@ -75,7 +75,7 @@ export const en = {
   },
   today: {
     metaOpenTasks: "{count} open tasks",
-    quickAddPlaceholder: "Add task #tag p1 due:2026-05-10 [bug]",
+    quickAddPlaceholder: "Add task: \"fix bug tomorrow p1 #bug\"",
     toggleComplete: "Toggle complete",
     openTask: "Open task",
     dailyLoad: "Daily Load",
@@ -368,6 +368,6 @@ export const en = {
     offline: "Offline",
     idle: "Idle",
     syncing: "Syncing",
-    error: "Error"
+    error: "Needs review"
   }
 } satisfies TranslationDictionary;

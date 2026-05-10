@@ -329,7 +329,6 @@ function TodayView() {
           <div className="metric-grid">
             <Metric label={t("today.open")} value={openTasks.length} />
             <Metric label={t("common.done")} value={completedCount} />
-            <Metric label={t("nav.focus")} value="0m" />
             <Metric label={t("common.sync")} value={t("common.local")} />
           </div>
         </Panel>
@@ -635,18 +634,14 @@ function ProjectsView() {
   const createProject = useAppStore((state) => state.createProject);
   const updateProject = useAppStore((state) => state.updateProject);
   const deleteProject = useAppStore((state) => state.deleteProject);
-  const createTask = useAppStore((state) => state.createTask);
-  const selectTask = useAppStore((state) => state.selectTask);
   const searchQuery = useAppStore((state) => state.searchQuery);
   const taskFilters = useAppStore((state) => state.taskFilters);
   const setTaskFilters = useAppStore((state) => state.setTaskFilters);
   const clearTaskFilters = useAppStore((state) => state.clearTaskFilters);
   const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
   const [projectEditDraft, setProjectEditDraft] = useState({ name: "", description: "" });
-  const [taskDraft, setTaskDraft] = useState({ title: "", description: "" });
   const [projectFormMessage, setProjectFormMessage] = useState("");
-  const [taskFormMessage, setTaskFormMessage] = useState("");
-  const [projectMode, setProjectMode] = useState<"list" | "board">("board");
+  const [projectMode, setProjectMode] = useState<"list" | "board">("list");
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null;
   const projectTasks = activeProject ? tasks.filter((task) => task.projectId === activeProject.id && !task.deletedAt) : [];
   const visibleProjectTasks = activeProject
@@ -677,23 +672,6 @@ function ProjectsView() {
       setProjectDraft({ name: "", description: "" });
       setProjectFormMessage("");
     }
-  }
-
-  async function submitTask(event: FormEvent) {
-    event.preventDefault();
-    if (!taskDraft.title.trim() || !activeProject) {
-      setTaskFormMessage(t("projects.taskTitleRequired"));
-      return;
-    }
-
-    await createTask({
-      title: taskDraft.title,
-      description: taskDraft.description,
-      projectId: activeProject.id,
-      tags: []
-    });
-    setTaskDraft({ title: "", description: "" });
-    setTaskFormMessage("");
   }
 
   async function submitProjectEdit(event: FormEvent) {
@@ -831,31 +809,6 @@ function ProjectsView() {
                   </Button>
                 </div>
               </form>
-              <form className="task-create-form" onSubmit={submitTask}>
-                <input
-                  value={taskDraft.title}
-                  onChange={(event) => setTaskDraft({ ...taskDraft, title: event.target.value })}
-                  placeholder={t("projects.taskTitlePlaceholder")}
-                />
-                <textarea
-                  value={taskDraft.description}
-                  onChange={(event) => setTaskDraft({ ...taskDraft, description: event.target.value })}
-                  placeholder={t("projects.taskDescriptionPlaceholder")}
-                />
-                <Button type="submit">
-                  <Plus size={16} />
-                  {t("projects.addTask")}
-                </Button>
-              </form>
-              {taskFormMessage ? <div className="form-message">{taskFormMessage}</div> : null}
-              <div className="compact-list project-task-list">
-                {projectTasks.map((task) => (
-                  <button className="compact-row compact-button" key={task.id} type="button" onClick={() => selectTask(task.id)}>
-                    <span>{task.title}</span>
-                    <strong>{task.completed ? t("common.done") : task.priority?.toUpperCase() || t("today.open")}</strong>
-                  </button>
-                ))}
-              </div>
             </>
           ) : (
             <p className="muted-copy">{t("projects.selectOrCreate")}</p>
@@ -1340,7 +1293,7 @@ function AuthScreen() {
           {mode === "register" ? (
             <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("settings.name")} />
           ) : null}
-          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("settings.email")} type="email" />
+          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("settings.email")} inputMode="email" />
           {mode === "reset" ? (
             <input value={resetToken} onChange={(event) => setResetToken(event.target.value)} placeholder={t("auth.resetToken")} />
           ) : null}
@@ -1864,10 +1817,6 @@ function TaskDetailModal() {
               {t("taskDetail.addTag")}
             </Button>
           </form>
-          <label>
-            <span>{t("taskDetail.tags")}</span>
-            <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} />
-          </label>
         </section>
 
         <details className="detail-section detail-accordion">

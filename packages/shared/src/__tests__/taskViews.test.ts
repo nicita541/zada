@@ -40,4 +40,13 @@ describe("task view helpers", () => {
     expect(upcomingGroups.nextSeven.map((task) => task.id)).toEqual(["later"]);
     expect(upcomingGroups.later).toEqual([]);
   });
+
+  it("uses the local calendar day instead of UTC for upcoming boundaries", () => {
+    const upcomingGroups = groupUpcomingTasksByDueDate(
+      [{ id: "same-local-day", title: "Same local day", dueDate: "2026-05-11", completed: false }],
+      new Date(2026, 4, 11, 2, 30)
+    );
+
+    expect(upcomingGroups.nextSeven).toEqual([]);
+  });
 });
