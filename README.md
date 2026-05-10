@@ -96,10 +96,10 @@ Run `npm install` again after package changes so workspace links are refreshed.
 - Shared internal link parser for `[[Task: ...]]`, `[[GDD: ...]]`, `[[Snippet: ...]]`, notes, concepts, files, bugs, and milestones.
 - Premium gates for online and offline entitlement checks, including `currentPeriodEnd`, `lifetime_dev`, and `admin`.
 - Notes sync helpers for `local_only`, `pending`, `synced`, and `error`.
-- API routes for auth, import preview/confirm, billing status/features/checkout, admin grants/revokes, sync bootstrap/push/changes, and core CRUD endpoints.
+- API routes for auth/session restore/logout/dev password reset, import preview/confirm, billing status/features/checkout, admin grants/revokes, sync bootstrap/push/changes, and core project/task/tag CRUD endpoints.
 - Prisma schema for users, sessions, workspaces, projects, board columns, tasks, tags, subtasks, reminders, habits, notes, references, code snippets, milestones, focus sessions, subscriptions, entitlements, devices, settings, and change log.
-- React app shell with desktop sidebar, mobile bottom navigation, quick add, task list, import preview, notes sync controls, subscription screen, premium-gated game-dev workspace, focus, stats, settings, and minimal login/register UI.
-- IndexedDB stores for projects, board columns, tasks, tags, subtasks, notes, references, code snippets, milestones, focus sessions, sync queue, sync metadata, subscription cache, and note sync settings.
+- React app shell with auth gate, login/register/recovery UI, desktop sidebar, mobile bottom navigation, quick add, task list, project create/edit/delete/select, task detail editing, import preview, notes sync controls, subscription screen, premium-gated game-dev workspace, focus, stats, and settings.
+- IndexedDB stores for projects, board columns, tasks, tags, subtasks, notes, references, code snippets, milestones, focus sessions, sync queue, sync metadata, subscription cache, and note sync settings. Project/task mutations write locally first and enqueue sync work.
 - Electron preload bridge for `window.zadaDesktop.openLocalPath(path)` and `window.zadaDesktop.revealInExplorer(path)` with `contextIsolation` enabled and `nodeIntegration` disabled.
 - Capacitor config wired to the shared web build.
 

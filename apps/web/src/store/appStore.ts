@@ -284,7 +284,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (canReachApi()) {
       try {
-        const saved = normalizeProject(await api.createProject(project));
+        const saved = normalizeProject(
+          await api.createProject({
+            id: project.id,
+            name: project.name,
+            description: project.description,
+            type: project.type,
+            workspaceId: project.workspaceId ?? undefined
+          })
+        );
         await db.projects.put(saved);
         await clearQueuedEntity("project", project.id);
         set({ projects: replaceById(get().projects, saved), activeProjectId: saved.id });

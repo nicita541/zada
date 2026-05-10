@@ -203,6 +203,9 @@ export const en = {
     priority: "Priority",
     noPriority: "No priority",
     dueDate: "Due date",
+    gameArea: "Game area",
+    severity: "Severity",
+    buildVersion: "Build version",
     tags: "Tags",
     complete: "Complete",
     reopen: "Reopen"

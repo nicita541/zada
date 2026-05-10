@@ -205,6 +205,9 @@ export interface TranslationDictionary {
     priority: string;
     noPriority: string;
     dueDate: string;
+    gameArea: string;
+    severity: string;
+    buildVersion: string;
     tags: string;
     complete: string;
     reopen: string;

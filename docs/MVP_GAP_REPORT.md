@@ -4,10 +4,10 @@ This report compares the current repository with the target Zada MVP. The curren
 
 | Module | Status | Evidence | What is missing | Priority |
 |---|---|---|---|---|
-| Auth | Partial | `apps/api/src/routes/auth.ts`, `apps/api/src/services/authService.ts`, `apps/web/src/App.tsx` | Register/login/refresh/me exist, but reset password is not implemented, logout UI only clears local tokens, and frontend auth flow is minimal. | High |
-| User profile | Skeleton | `apps/api/src/routes/auth.ts` (`/me`), `apps/api/prisma/schema.prisma` (`User`) | No profile edit screen, avatar/preferences UI, or full account settings workflow. | Medium |
-| Projects | Partial | `apps/api/src/routes/projects.ts`, `apps/web/src/App.tsx` | API has basic CRUD, UI shows project cards but does not manage real project records end to end. | High |
-| Tasks | Partial | `apps/api/src/routes/projects.ts`, `apps/web/src/store/appStore.ts` | Local quick add/toggle works and API has basic CRUD, but task detail, subtasks, reminders, recurrence UI, and server sync application are incomplete. | High |
+| Auth | Done for MVP auth flow | `apps/api/src/routes/auth.ts`, `apps/api/src/services/authService.ts`, `apps/web/src/App.tsx` | Register/login/refresh/me/logout work, frontend has auth gate/session restore, and reset password has a dev-only token flow. Production email delivery and profile editing are still future work. | High |
+| User profile | Partial | `apps/api/src/routes/auth.ts` (`/me`), `apps/api/prisma/schema.prisma` (`User`), `apps/web/src/App.tsx` | Current account panel shows user identity and logout. No profile edit screen, avatar/preferences UI, or full account settings workflow. | Medium |
+| Projects | Done for MVP CRUD | `apps/api/src/routes/projects.ts`, `apps/web/src/App.tsx`, `apps/web/src/store/appStore.ts` | Project list/create/edit/delete/select works with local-first persistence and API sync. Advanced project dashboards and board workflow remain future work. | High |
+| Tasks | Partial | `apps/api/src/routes/projects.ts`, `apps/web/src/store/appStore.ts`, `apps/web/src/App.tsx` | Task create/open/edit/complete/delete works with detail modal, local-first persistence, API CRUD, tags, and core game-dev fields. Subtasks, reminders, recurrence UI, and drag ordering are still incomplete. | High |
 | Board / Kanban | Skeleton | `apps/web/src/App.tsx`, `apps/api/src/routes/projects.ts` | Board columns exist in API and preview UI, but there is no drag-and-drop persistence or real board workflow. | High |
 | Calendar | Skeleton | `apps/web/src/App.tsx` | Calendar is a visual placeholder with agenda data from local tasks only; no month/week switching or real scheduling logic. | Medium |
 | Habits | Skeleton | `apps/web/src/App.tsx`, `apps/api/prisma/schema.prisma` | Static habit cards only; no habit CRUD or logging UI/API route. | Medium |
@@ -26,7 +26,7 @@ This report compares the current repository with the target Zada MVP. The curren
 | Milestones | Partial | `apps/api/src/routes/projects.ts`, `apps/web/src/App.tsx`, `apps/api/prisma/schema.prisma` | API CRUD and dashboard preview exist, but milestone progress is not linked to real task completion. | Medium |
 | Premium/subscription gates | Partial | `packages/shared/src/premium.ts`, `apps/api/src/routes/billing.ts`, `apps/web/src/App.tsx` | Feature gates exist in shared/UI and checkout is unavailable by design, but frontend does not refresh billing status automatically in all flows. | High |
 | Offline premium cache | Partial | `apps/web/src/lib/db.ts`, `packages/shared/src/premium.ts`, `apps/web/src/store/appStore.ts` | Subscription cache store and offline rules exist, but online verification/refresh lifecycle is incomplete. | High |
-| Sync engine | Skeleton | `apps/web/src/lib/syncEngine.ts`, `apps/api/src/routes/sync.ts` | Sync queue can push change log entries, but server changes are not applied back to entities and conflict handling is minimal. | High |
+| Sync engine | Partial | `apps/web/src/lib/syncEngine.ts`, `apps/api/src/routes/sync.ts` | Sync queue can push project/task/note changes; project/task pushes are applied to server entities and accepted items are cleared locally. Pull/conflict handling remains minimal. | High |
 | IndexedDB stores | Partial | `apps/web/src/lib/db.ts` | Stores cover MVP entities, but many stores are not yet used by UI flows. | High |
 | API routes | Partial | `apps/api/src/routes/*` | Auth/import/billing/sync/core CRUD exist, but some modules lack full business logic, pagination, guards, and route tests. | High |
 | Prisma schema | Partial | `apps/api/prisma/schema.prisma` | MVP models and important fields exist, but migrations need verification after schema changes and indexes may need tuning. | High |
@@ -39,8 +39,10 @@ This report compares the current repository with the target Zada MVP. The curren
 
 ## UI Behavior Notes
 
-- Login and register forms call the API through `@zada/api-client`.
-- Logout currently clears local frontend tokens only; it does not call `/api/auth/logout`.
+- Login and register are behind an auth gate and call the API through `@zada/api-client`.
+- Logout calls `/api/auth/logout` when possible and then clears local frontend tokens.
+- Project and task mutations write to IndexedDB first, update UI immediately, enqueue sync work, and call the API when online/authenticated.
+- Task detail supports title, description, project, completion, priority, due date, tags, type, game area, severity, and build version.
 - Notes sync toggle changes the local note sync setting and prevents `local_only` notes from entering sync push.
 - Premium gates use cached subscription state and shared offline entitlement rules, but billing refresh is not automatic.
 - Upgrade shows the purchase-unavailable message and does not connect to a payment provider.

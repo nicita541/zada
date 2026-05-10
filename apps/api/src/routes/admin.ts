@@ -22,10 +22,11 @@ router.use(requireAuth, requireAdmin);
 router.post(
   "/users/:userId/subscription/grant",
   asyncHandler(async (req, res) => {
+    const userId = routeUserId(req.params.userId);
     const input = subscriptionGrantSchema.parse(req.body);
     const subscription = await prisma.subscription.create({
       data: {
-        userId: req.params.userId,
+        userId,
         plan: input.plan,
         status: input.status,
         source: `manual:${currentUserId(req)}`,
@@ -40,8 +41,9 @@ router.post(
 router.post(
   "/users/:userId/subscription/revoke",
   asyncHandler(async (req, res) => {
+    const userId = routeUserId(req.params.userId);
     await prisma.subscription.updateMany({
-      where: { userId: req.params.userId, status: { in: ["active", "manual"] } },
+      where: { userId, status: { in: ["active", "manual"] } },
       data: { status: "canceled", currentPeriodEnd: new Date() }
     });
     res.json({ ok: true });
@@ -51,15 +53,16 @@ router.post(
 router.post(
   "/users/:userId/entitlements/grant",
   asyncHandler(async (req, res) => {
+    const userId = routeUserId(req.params.userId);
     const input = entitlementGrantSchema.parse(req.body);
     const entitlement = await prisma.premiumEntitlement.upsert({
-      where: { userId_feature: { userId: req.params.userId, feature: input.feature } },
+      where: { userId_feature: { userId, feature: input.feature } },
       update: {
         grantedBy: currentUserId(req),
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null
       },
       create: {
-        userId: req.params.userId,
+        userId,
         feature: input.feature,
         grantedBy: currentUserId(req),
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null
@@ -73,12 +76,17 @@ router.post(
 router.post(
   "/users/:userId/entitlements/revoke",
   asyncHandler(async (req, res) => {
+    const userId = routeUserId(req.params.userId);
     const input = z.object({ feature: z.string().min(1) }).parse(req.body);
     await prisma.premiumEntitlement.deleteMany({
-      where: { userId: req.params.userId, feature: input.feature }
+      where: { userId, feature: input.feature }
     });
     res.json({ ok: true });
   })
 );
+
+function routeUserId(value: string | undefined): string {
+  return z.string().uuid().parse(value);
+}
 
 export default router;

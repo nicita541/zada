@@ -18,6 +18,15 @@ describe("i18n", () => {
     expect(translate("en", "nav.settings")).toBe("Settings");
   });
 
+  it("contains auth, project, and task-detail keys added for the MVP flow", () => {
+    expect(translate("ru", "auth.loginTitle")).not.toBe("auth.loginTitle");
+    expect(translate("ru", "projects.createProject")).not.toBe("projects.createProject");
+    expect(translate("ru", "taskDetail.buildVersion")).not.toBe("taskDetail.buildVersion");
+    expect(translate("en", "auth.loginTitle")).toBe("Sign in");
+    expect(translate("en", "projects.createProject")).toBe("Create project");
+    expect(translate("en", "taskDetail.buildVersion")).toBe("Build version");
+  });
+
   it("returns the key for a missing key", () => {
     expect(translate("ru", "missing.key" as never)).toBe("missing.key");
   });

@@ -152,8 +152,10 @@ router.get(
         projectId: z.string().uuid().optional(),
         status: z.string().optional(),
         priority: z.string().optional(),
+        completed: z.enum(["true", "false"]).optional(),
         dueFrom: z.string().optional(),
         dueTo: z.string().optional(),
+        search: z.string().trim().optional(),
         tag: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(200).default(100),
         offset: z.coerce.number().int().min(0).default(0)
@@ -166,6 +168,17 @@ router.get(
       status: filters.status,
       priority: filters.priority
     };
+
+    if (!filters.status && filters.completed) {
+      where.status = filters.completed === "true" ? "done" : { not: "done" };
+    }
+
+    if (filters.search) {
+      where.OR = [
+        { title: { contains: filters.search, mode: "insensitive" } },
+        { description: { contains: filters.search, mode: "insensitive" } }
+      ];
+    }
 
     if (filters.dueFrom || filters.dueTo) {
       where.dueDate = {
@@ -372,8 +385,9 @@ router.post(
 router.delete(
   "/tasks/:id",
   asyncHandler(async (req, res) => {
+    const taskId = routeId(req.params.id);
     await prisma.task.update({
-      where: { id: req.params.id, userId: currentUserId(req) },
+      where: { id: taskId, userId: currentUserId(req) },
       data: { deletedAt: new Date() }
     });
     res.status(204).end();
@@ -409,9 +423,10 @@ router.post(
 router.patch(
   "/tags/:id",
   asyncHandler(async (req, res) => {
+    const tagId = routeId(req.params.id);
     const input = z.object({ name: z.string().min(1).optional(), color: z.string().nullable().optional() }).parse(req.body);
     const tag = await prisma.tag.update({
-      where: { id: req.params.id, userId: currentUserId(req) },
+      where: { id: tagId, userId: currentUserId(req) },
       data: input
     });
     res.json(tag);
@@ -421,8 +436,9 @@ router.patch(
 router.delete(
   "/tags/:id",
   asyncHandler(async (req, res) => {
+    const tagId = routeId(req.params.id);
     await prisma.tag.update({
-      where: { id: req.params.id, userId: currentUserId(req) },
+      where: { id: tagId, userId: currentUserId(req) },
       data: { deletedAt: new Date() }
     });
     res.status(204).end();
@@ -465,9 +481,10 @@ router.post(
 router.patch(
   "/notes/:id",
   asyncHandler(async (req, res) => {
+    const noteId = routeId(req.params.id);
     const input = noteInputSchema.partial().parse(req.body);
     const note = await prisma.note.update({
-      where: { id: req.params.id, userId: currentUserId(req) },
+      where: { id: noteId, userId: currentUserId(req) },
       data: {
         ...input,
         syncStatus: input.localOnly === true || input.syncEnabled === false ? "local_only" : input.syncStatus
@@ -480,8 +497,9 @@ router.patch(
 router.delete(
   "/notes/:id",
   asyncHandler(async (req, res) => {
+    const noteId = routeId(req.params.id);
     await prisma.note.update({
-      where: { id: req.params.id, userId: currentUserId(req) },
+      where: { id: noteId, userId: currentUserId(req) },
       data: { deletedAt: new Date() }
     });
     res.status(204).end();
@@ -720,6 +738,10 @@ async function syncTaskTags(userId: string, workspaceId: string, taskId: string,
       await tx.taskTag.create({ data: { taskId, tagId: tag.id } });
     }
   });
+}
+
+function routeId(value: string | undefined): string {
+  return z.string().uuid().parse(value);
 }
 
 export default router;

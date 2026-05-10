@@ -123,11 +123,22 @@ export class ZadaApiClient {
     return this.request<void>(`/projects/${id}`, { method: "DELETE" });
   }
 
-  listTasks(filters: { projectId?: string; status?: string; priority?: string; tag?: string; dueFrom?: string; dueTo?: string } = {}) {
+  listTasks(
+    filters: {
+      projectId?: string;
+      status?: string;
+      completed?: boolean;
+      priority?: string;
+      tag?: string;
+      dueFrom?: string;
+      dueTo?: string;
+      search?: string;
+    } = {}
+  ) {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
-      if (value) {
-        params.set(key, value);
+      if (value !== undefined && value !== "") {
+        params.set(key, String(value));
       }
     }
     const query = params.toString();

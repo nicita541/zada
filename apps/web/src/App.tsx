@@ -310,12 +310,22 @@ function ProjectsView() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const setActiveProject = useAppStore((state) => state.setActiveProject);
   const createProject = useAppStore((state) => state.createProject);
+  const updateProject = useAppStore((state) => state.updateProject);
+  const deleteProject = useAppStore((state) => state.deleteProject);
   const createTask = useAppStore((state) => state.createTask);
   const selectTask = useAppStore((state) => state.selectTask);
   const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
+  const [projectEditDraft, setProjectEditDraft] = useState({ name: "", description: "" });
   const [taskDraft, setTaskDraft] = useState({ title: "", description: "" });
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null;
   const projectTasks = activeProject ? tasks.filter((task) => task.projectId === activeProject.id) : [];
+
+  useEffect(() => {
+    setProjectEditDraft({
+      name: activeProject?.name ?? "",
+      description: activeProject?.description ?? ""
+    });
+  }, [activeProject?.id, activeProject?.name, activeProject?.description]);
 
   async function submitProject(event: FormEvent) {
     event.preventDefault();
@@ -338,6 +348,23 @@ function ProjectsView() {
       tags: []
     });
     setTaskDraft({ title: "", description: "" });
+  }
+
+  async function submitProjectEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!activeProject) {
+      return;
+    }
+
+    await updateProject(activeProject.id, projectEditDraft);
+  }
+
+  async function removeProject() {
+    if (!activeProject) {
+      return;
+    }
+
+    await deleteProject(activeProject.id);
   }
 
   return (
@@ -387,6 +414,28 @@ function ProjectsView() {
           <PanelTitle icon={<Pencil size={18} />} title={activeProject ? activeProject.name : t("projects.noActiveProject")} />
           {activeProject ? (
             <>
+              <form className="task-create-form" onSubmit={submitProjectEdit}>
+                <input
+                  value={projectEditDraft.name}
+                  onChange={(event) => setProjectEditDraft({ ...projectEditDraft, name: event.target.value })}
+                  placeholder={t("projects.namePlaceholder")}
+                />
+                <textarea
+                  value={projectEditDraft.description}
+                  onChange={(event) => setProjectEditDraft({ ...projectEditDraft, description: event.target.value })}
+                  placeholder={t("projects.descriptionPlaceholder")}
+                />
+                <div className="toolbar">
+                  <Button type="submit">
+                    <Pencil size={16} />
+                    {t("common.save")}
+                  </Button>
+                  <Button type="button" variant="danger" onClick={removeProject}>
+                    <Trash2 size={16} />
+                    {t("common.delete")}
+                  </Button>
+                </div>
+              </form>
               <form className="task-create-form" onSubmit={submitTask}>
                 <input
                   value={taskDraft.title}
@@ -1073,6 +1122,9 @@ function TaskDetailModal() {
     type: "feature",
     priority: "",
     dueDate: "",
+    gameArea: "",
+    severity: "",
+    buildVersion: "",
     tags: ""
   });
 
@@ -1088,6 +1140,9 @@ function TaskDetailModal() {
       type: task.type,
       priority: task.priority ?? "",
       dueDate: task.dueDate ?? "",
+      gameArea: task.gameArea ?? "",
+      severity: task.severity ?? "",
+      buildVersion: task.buildVersion ?? "",
       tags: task.tags.join(", ")
     });
   }, [task]);
@@ -1096,15 +1151,20 @@ function TaskDetailModal() {
     return null;
   }
 
+  const activeTask = task;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
-    await updateTask(task.id, {
+    await updateTask(activeTask.id, {
       title: draft.title,
       description: draft.description,
       projectId: draft.projectId || null,
       type: draft.type,
       priority: draft.priority || null,
       dueDate: draft.dueDate || null,
+      gameArea: draft.gameArea || null,
+      severity: draft.severity || null,
+      buildVersion: draft.buildVersion || null,
       tags: draft.tags
         .split(",")
         .map((tag) => tag.trim())
@@ -1113,7 +1173,7 @@ function TaskDetailModal() {
   }
 
   async function remove() {
-    await deleteTask(task.id);
+    await deleteTask(activeTask.id);
   }
 
   return (
@@ -1122,7 +1182,7 @@ function TaskDetailModal() {
         <div className="modal-head">
           <div>
             <h2>{t("taskDetail.title")}</h2>
-            <span>{task.updatedAt.slice(0, 10)}</span>
+            <span>{activeTask.updatedAt.slice(0, 10)}</span>
           </div>
           <button className="icon-button small" type="button" title={t("common.close")} onClick={() => selectTask(null)}>
             <X size={16} />
@@ -1173,7 +1233,19 @@ function TaskDetailModal() {
             <span>{t("taskDetail.dueDate")}</span>
             <input type="date" value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} />
           </label>
+          <label>
+            <span>{t("taskDetail.gameArea")}</span>
+            <input value={draft.gameArea} onChange={(event) => setDraft({ ...draft, gameArea: event.target.value })} />
+          </label>
+          <label>
+            <span>{t("taskDetail.severity")}</span>
+            <input value={draft.severity} onChange={(event) => setDraft({ ...draft, severity: event.target.value })} />
+          </label>
         </div>
+        <label>
+          <span>{t("taskDetail.buildVersion")}</span>
+          <input value={draft.buildVersion} onChange={(event) => setDraft({ ...draft, buildVersion: event.target.value })} />
+        </label>
         <label>
           <span>{t("taskDetail.tags")}</span>
           <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} />
@@ -1183,9 +1255,13 @@ function TaskDetailModal() {
             <Pencil size={16} />
             {t("common.save")}
           </Button>
-          <Button type="button" variant="secondary" onClick={() => (task.completed ? uncompleteTask(task.id) : completeTask(task.id))}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => (activeTask.completed ? uncompleteTask(activeTask.id) : completeTask(activeTask.id))}
+          >
             <Check size={16} />
-            {task.completed ? t("taskDetail.reopen") : t("taskDetail.complete")}
+            {activeTask.completed ? t("taskDetail.reopen") : t("taskDetail.complete")}
           </Button>
           <Button type="button" variant="danger" onClick={remove}>
             <Trash2 size={16} />

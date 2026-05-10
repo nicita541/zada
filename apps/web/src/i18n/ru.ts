@@ -203,6 +203,9 @@ export const ru = {
     priority: "Приоритет",
     noPriority: "Без приоритета",
     dueDate: "Срок",
+    gameArea: "Область игры",
+    severity: "Серьёзность",
+    buildVersion: "Версия сборки",
     tags: "Теги",
     complete: "Завершить",
     reopen: "Вернуть в работу"
