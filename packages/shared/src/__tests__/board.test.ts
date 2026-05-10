@@ -3,6 +3,7 @@ import {
   backlogColumnId,
   dedupeBoardColumns,
   defaultBoardColumnsForProject,
+  detachTasksFromDeletedColumn,
   effectiveTaskColumnId,
   inferBoardColumnKind,
   missingDefaultBoardColumns,
@@ -119,6 +120,22 @@ describe("board helpers", () => {
       { taskId: "a", columnId: "backlog", position: 0 },
       { taskId: "c", columnId: "todo", position: 0 },
       { taskId: "b", columnId: "todo", position: 1 }
+    ]);
+  });
+
+  it("detaches tasks when their column is deleted", () => {
+    expect(
+      detachTasksFromDeletedColumn(
+        [
+          { id: "b", columnId: "review", position: 4 },
+          { id: "a", columnId: "review", position: 2 },
+          { id: "c", columnId: "todo", position: 0 }
+        ],
+        "review"
+      )
+    ).toEqual([
+      { taskId: "a", columnId: null, position: 0 },
+      { taskId: "b", columnId: null, position: 1 }
     ]);
   });
 

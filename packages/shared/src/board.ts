@@ -218,6 +218,17 @@ export function moveBoardTask(
   );
 }
 
+export function detachTasksFromDeletedColumn(tasks: BoardTaskLike[], deletedColumnId: string): BoardTaskMove[] {
+  return tasks
+    .filter((task) => task.columnId === deletedColumnId)
+    .sort((left, right) => (left.position ?? 0) - (right.position ?? 0) || left.id.localeCompare(right.id))
+    .map((task, position) => ({
+      taskId: task.id,
+      columnId: null,
+      position
+    }));
+}
+
 function isBoardColumnKind(kind: string | null | undefined): kind is BoardColumnKind {
   return ["backlog", "todo", "in_progress", "review", "done", "custom"].includes(kind ?? "");
 }

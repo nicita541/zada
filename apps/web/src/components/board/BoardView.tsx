@@ -292,6 +292,9 @@ function BoardTaskCard({
         </Badge>
         {task.priority ? <span>{task.priority.toUpperCase()}</span> : null}
         {task.dueDate ? <span>{task.dueDate}</span> : null}
+        {task.tags.slice(0, 3).map((tag) => (
+          <span key={tag}>#{tag}</span>
+        ))}
         {subtasks.length > 0 ? (
           <span title={t("board.subtasks")}>
             <CheckSquare size={12} />

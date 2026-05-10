@@ -37,6 +37,7 @@ export interface TranslationDictionary {
   };
   nav: {
     today: string;
+    inbox: string;
     projects: string;
     calendar: string;
     habits: string;
@@ -52,6 +53,7 @@ export interface TranslationDictionary {
     personalWorkspace: string;
     mainNavigation: string;
     mobileNavigation: string;
+    later: string;
     notifications: string;
     toggleTheme: string;
     addTask: string;
@@ -94,8 +96,17 @@ export interface TranslationDictionary {
     allPriorities: string;
     allTypes: string;
     allTags: string;
+    filterAll: string;
+    filterNoDate: string;
+    searchResults: string;
+    previewDue: string;
     noTasks: string;
+    noTasksDescription: string;
+    nothingFound: string;
+    nothingFoundDescription: string;
     noUpcoming: string;
+    inboxEmpty: string;
+    inboxEmptyDescription: string;
     dueReminders: string;
     dismissReminder: string;
   };
@@ -119,6 +130,9 @@ export interface TranslationDictionary {
     taskTitlePlaceholder: string;
     taskDescriptionPlaceholder: string;
     addTask: string;
+    projectNoTasks: string;
+    projectNoTasksDescription: string;
+    noMatchingTasks: string;
     columns: {
       ideas: string;
       backlog: string;
@@ -264,12 +278,16 @@ export interface TranslationDictionary {
     subtasks: string;
     subtaskPlaceholder: string;
     emptySubtasks: string;
+    emptySubtasksDescription: string;
+    subtasksProgress: string;
     reminders: string;
     reminderAt: string;
     reminderRequired: string;
     emptyReminders: string;
+    emptyRemindersDescription: string;
     repeat: string;
     repeatCompletionNote: string;
+    noRepeat: string;
     repeatNone: string;
     repeatDaily: string;
     repeatWeekly: string;

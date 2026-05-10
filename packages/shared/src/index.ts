@@ -8,3 +8,4 @@ export * from "./recurrence";
 export * from "./taskOutlineParser";
 export * from "./gameDevTemplate";
 export * from "./sync";
+export * from "./taskViews";

@@ -6,6 +6,7 @@ import {
   dedupeBoardColumns,
   defaultBoardColumnsForProject,
   defaultNoteSyncSettings,
+  detachTasksFromDeletedColumn,
   inferBoardColumnKind,
   missingDefaultBoardColumns,
   getNextDueDate,
@@ -99,7 +100,7 @@ interface AppState {
   createTag: (input: { name: string; color?: string | null }) => Promise<LocalTag | null>;
   assignTaskTag: (taskId: string, tagId: string) => Promise<void>;
   removeTaskTag: (taskId: string, tagId: string) => Promise<void>;
-  quickAdd: (input: string) => Promise<void>;
+  quickAdd: (input: string, projectId?: string | null) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   setImportSource: (source: string) => void;
   confirmImport: () => Promise<void>;
@@ -112,6 +113,7 @@ interface AppState {
 
 export type ViewId =
   | "today"
+  | "inbox"
   | "projects"
   | "calendar"
   | "habits"
@@ -155,6 +157,7 @@ export interface TaskFilters {
   priority: string | null;
   type: string | null;
   tag: string | null;
+  noDate: boolean;
 }
 
 const now = () => new Date().toISOString();
@@ -172,10 +175,11 @@ const defaultSubscription: SubscriptionSnapshot = {
 
 const defaultTaskFilters: TaskFilters = {
   projectId: null,
-  status: "all",
+  status: "todo",
   priority: null,
   type: null,
-  tag: null
+  tag: null,
+  noDate: false
 };
 
 const starterTasks: LocalTask[] = [
@@ -761,16 +765,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const deletedAt = now();
     const deletedColumn = { ...existing, deletedAt, updatedAt: deletedAt };
-    const movedTasks = get()
-      .tasks.filter((task) => task.projectId === existing.projectId && task.columnId === existing.id)
-      .map<LocalTask>((task) => ({ ...task, columnId: null, updatedAt: deletedAt }));
+    const taskMoves = detachTasksFromDeletedColumn(
+      get().tasks.filter((task) => task.projectId === existing.projectId && !task.deletedAt),
+      existing.id
+    );
+    const taskById = new Map(get().tasks.map((task) => [task.id, task]));
+    const movedTasks = taskMoves.flatMap<LocalTask>((move) => {
+      const task = taskById.get(move.taskId);
+      return task ? [{ ...task, columnId: null, position: move.position, updatedAt: deletedAt }] : [];
+    });
+    const taskMoveQueueItems = taskMoves.map((move) =>
+      createSyncQueueItem(
+        "task",
+        move.taskId,
+        "move",
+        { projectId: existing.projectId, columnId: null, position: move.position },
+        new Date(deletedAt)
+      )
+    );
 
     await db.transaction("rw", db.board_columns, db.tasks, db.sync_queue, async () => {
       await db.board_columns.put(deletedColumn);
       if (movedTasks.length > 0) {
         await db.tasks.bulkPut(movedTasks);
       }
-      await db.sync_queue.put(createSyncQueueItem("board_column", existing.id, "delete", { id: existing.id, deletedAt }));
+      await db.sync_queue.bulkPut([
+        createSyncQueueItem("board_column", existing.id, "delete", { id: existing.id, deletedAt }, new Date(deletedAt)),
+        ...taskMoveQueueItems
+      ]);
     });
 
     set({
@@ -782,6 +804,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       try {
         await api.deleteColumn(columnId);
         await clearQueuedEntity("board_column", columnId);
+        if (taskMoveQueueItems.length > 0) {
+          await db.sync_queue.bulkDelete(taskMoveQueueItems.map((item) => item.id));
+        }
       } catch {
         set({ syncState: "error" });
       }
@@ -1205,7 +1230,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
   },
-  quickAdd: async (input) => {
+  quickAdd: async (input, projectId) => {
     const parsed = parseQuickAdd(input);
     if (!parsed.title) {
       return;
@@ -1215,6 +1240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       title: parsed.title,
       description: null,
       type: parsed.type,
+      projectId,
       priority: parsed.priority,
       dueDate: parsed.dueDate,
       startDate: parsed.startDate,

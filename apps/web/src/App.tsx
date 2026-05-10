@@ -4,7 +4,6 @@ import {
   Bell,
   CalendarDays,
   Check,
-  ChevronRight,
   ClipboardList,
   Clock,
   Code2,
@@ -44,24 +43,39 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Badge, Button, Panel } from "@zada/ui";
-import { canUseFeatureOffline, gameDevTemplate, parseInternalLinks, premiumFeatures } from "@zada/shared";
+import {
+  canUseFeatureOffline,
+  filterTasksForView,
+  gameDevTemplate,
+  groupTodayTasksByDueDate,
+  groupUpcomingTasksByDueDate,
+  parseInternalLinks,
+  parseQuickAdd,
+  premiumFeatures
+} from "@zada/shared";
 import { BoardView } from "./components/board/BoardView";
 import { useAppStore, type ViewId } from "./store/appStore";
-import type { LocalProject, LocalReminder, LocalSubtask, LocalTask } from "./lib/db";
+import type { LocalReminder, LocalSubtask, LocalTask } from "./lib/db";
 import { I18nProvider, useI18n, type Locale, type TranslationKey } from "./i18n";
 
-const navItems: Array<{ id: ViewId; labelKey: TranslationKey; icon: ReactNode }> = [
+const primaryNavItems: Array<{ id: ViewId; labelKey: TranslationKey; icon: ReactNode }> = [
   { id: "today", labelKey: "nav.today", icon: <ClipboardList size={18} /> },
+  { id: "inbox", labelKey: "nav.inbox", icon: <Archive size={18} /> },
   { id: "projects", labelKey: "nav.projects", icon: <Columns3 size={18} /> },
-  { id: "calendar", labelKey: "nav.calendar", icon: <CalendarDays size={18} /> },
-  { id: "habits", labelKey: "nav.habits", icon: <Flame size={18} /> },
   { id: "notes", labelKey: "nav.notes", icon: <NotebookText size={18} /> },
   { id: "import", labelKey: "nav.import", icon: <Import size={18} /> },
-  { id: "game-dev", labelKey: "nav.gameDev", icon: <FileCode2 size={18} /> },
-  { id: "focus", labelKey: "nav.focus", icon: <Timer size={18} /> },
-  { id: "stats", labelKey: "nav.stats", icon: <Gauge size={18} /> },
   { id: "settings", labelKey: "nav.settings", icon: <Settings size={18} /> }
 ];
+
+const laterNavItems: Array<{ id: ViewId; labelKey: TranslationKey; icon: ReactNode }> = [
+  { id: "calendar", labelKey: "nav.calendar", icon: <CalendarDays size={18} /> },
+  { id: "habits", labelKey: "nav.habits", icon: <Flame size={18} /> },
+  { id: "game-dev", labelKey: "nav.gameDev", icon: <FileCode2 size={18} /> },
+  { id: "focus", labelKey: "nav.focus", icon: <Timer size={18} /> },
+  { id: "stats", labelKey: "nav.stats", icon: <Gauge size={18} /> }
+];
+
+const navItems = [...primaryNavItems, ...laterNavItems];
 
 type TFunction = ReturnType<typeof useI18n>["t"];
 
@@ -143,11 +157,26 @@ function AppShell() {
           </div>
         </div>
         <nav className="sidebar-nav" aria-label={t("shell.mainNavigation")}>
-          {navItems.map((item) => {
+          {primaryNavItems.map((item) => {
             const label = t(item.labelKey);
             return (
               <button
                 className={`nav-button ${activeView === item.id ? "active" : ""}`}
+                key={item.id}
+                onClick={() => setActiveView(item.id)}
+                title={label}
+              >
+                {item.icon}
+                <span>{label}</span>
+              </button>
+            );
+          })}
+          <div className="nav-section-label">{t("shell.later")}</div>
+          {laterNavItems.map((item) => {
+            const label = t(item.labelKey);
+            return (
+              <button
+                className={`nav-button nav-button-muted ${activeView === item.id ? "active" : ""}`}
                 key={item.id}
                 onClick={() => setActiveView(item.id)}
                 title={label}
@@ -220,6 +249,8 @@ function AppShell() {
 
 function ViewRenderer({ view }: { view: ViewId }) {
   switch (view) {
+    case "inbox":
+      return <InboxView />;
     case "projects":
       return <ProjectsView />;
     case "calendar":
@@ -257,16 +288,24 @@ function TodayView() {
   const setTaskFilters = useAppStore((state) => state.setTaskFilters);
   const clearTaskFilters = useAppStore((state) => state.clearTaskFilters);
   const completedCount = tasks.filter((task) => task.completed).length;
-  const visibleTasks = filterTasks(tasks, projects, searchQuery, taskFilters);
+  const visibleTasks = filterTasksForView(tasks, projects, searchQuery, taskFilters);
   const openTasks = visibleTasks.filter((task) => !task.completed);
-  const todayGroups = groupTodayTasks(visibleTasks);
-  const upcomingGroups = groupUpcomingTasks(visibleTasks);
+  const todayGroups = groupTodayTasksByDueDate(visibleTasks);
+  const upcomingGroups = groupUpcomingTasksByDueDate(visibleTasks);
+  const hasSearch = Boolean(searchQuery.trim());
+  const isFiltered = taskFilters.status !== "todo" || Boolean(taskFilters.priority || taskFilters.projectId || taskFilters.type || taskFilters.tag || taskFilters.noDate);
 
   return (
     <div className="page-grid">
       <section className="page-main">
         <PageHeader title={t("nav.today")} meta={t("today.metaOpenTasks", { count: openTasks.length })} />
         <QuickAdd />
+        <FilterChips
+          filters={taskFilters}
+          onChange={setTaskFilters}
+          onClear={clearTaskFilters}
+        />
+        {hasSearch ? <div className="search-summary">{t("today.searchResults", { count: visibleTasks.length })}</div> : null}
         <GroupedTaskList
           groups={[
             [t("today.overdue"), todayGroups.overdue],
@@ -276,7 +315,12 @@ function TodayView() {
           subtasksByTaskId={subtasksByTaskId}
           remindersByTaskId={remindersByTaskId}
         />
-        {visibleTasks.length === 0 ? <div className="empty-state">{t("today.noTasks")}</div> : null}
+        {visibleTasks.length === 0 ? (
+          <EmptyState
+            title={hasSearch || isFiltered ? t("today.nothingFound") : t("today.noTasks")}
+            description={hasSearch || isFiltered ? t("today.nothingFoundDescription") : t("today.noTasksDescription")}
+          />
+        ) : null}
       </section>
 
       <aside className="page-side">
@@ -285,7 +329,7 @@ function TodayView() {
           <div className="metric-grid">
             <Metric label={t("today.open")} value={openTasks.length} />
             <Metric label={t("common.done")} value={completedCount} />
-            <Metric label={t("nav.focus")} value="50m" />
+            <Metric label={t("nav.focus")} value="0m" />
             <Metric label={t("common.sync")} value={t("common.local")} />
           </div>
         </Panel>
@@ -344,26 +388,102 @@ function TodayView() {
   );
 }
 
-function QuickAdd() {
+function InboxView() {
+  const { t } = useI18n();
+  const tasks = useAppStore((state) => state.tasks);
+  const subtasksByTaskId = useAppStore((state) => state.subtasksByTaskId);
+  const remindersByTaskId = useAppStore((state) => state.remindersByTaskId);
+  const inboxTasks = tasks.filter((task) => !task.projectId && !task.completed && !task.deletedAt);
+
+  return (
+    <section className="page-main single-column">
+      <PageHeader title={t("nav.inbox")} meta={t("today.metaOpenTasks", { count: inboxTasks.length })} />
+      <QuickAdd projectId={null} />
+      <GroupedTaskList
+        groups={[[t("projects.inbox"), inboxTasks]]}
+        subtasksByTaskId={subtasksByTaskId}
+        remindersByTaskId={remindersByTaskId}
+      />
+      {inboxTasks.length === 0 ? <EmptyState title={t("today.inboxEmpty")} description={t("today.inboxEmptyDescription")} /> : null}
+    </section>
+  );
+}
+
+function QuickAdd({ projectId }: { projectId?: string | null }) {
   const { t } = useI18n();
   const quickAdd = useAppStore((state) => state.quickAdd);
   const [value, setValue] = useState("");
+  const parsed = value.trim() ? parseQuickAdd(value) : null;
+  const previewItems = parsed
+    ? [
+        parsed.dueDate ? t("today.previewDue", { date: parsed.dueDate }) : null,
+        parsed.priority ? parsed.priority.toUpperCase() : null,
+        ...parsed.tags.map((tag) => `#${tag}`),
+        parsed.repeat ? repeatLabel(t, parsed.repeat) : null,
+        parsed.type !== "feature" ? dynamicLabel(t, `taskTypes.${parsed.type}`, parsed.type) : null
+      ].filter((item): item is string => Boolean(item))
+    : [];
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    await quickAdd(value);
+    if (!value.trim()) {
+      return;
+    }
+    await quickAdd(value, projectId);
     setValue("");
   }
 
   return (
-    <form className="quick-add" onSubmit={submit}>
-      <Plus size={18} />
-      <input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t("today.quickAddPlaceholder")} />
-      <Button title={t("shell.addTask")} type="submit">
-        <Zap size={16} />
-        {t("common.add")}
-      </Button>
-    </form>
+    <div className="quick-add-wrap">
+      <form className="quick-add" onSubmit={submit}>
+        <Plus size={18} />
+        <input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t("today.quickAddPlaceholder")} />
+        <Button title={t("shell.addTask")} type="submit">
+          <Zap size={16} />
+          {t("common.add")}
+        </Button>
+      </form>
+      {parsed && (previewItems.length > 0 || parsed.title !== value.trim()) ? (
+        <div className="quick-add-preview">
+          <span>{parsed.title}</span>
+          {previewItems.map((item) => (
+            <strong key={item}>{item}</strong>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FilterChips({
+  filters,
+  onChange,
+  onClear
+}: {
+  filters: ReturnType<typeof useAppStore.getState>["taskFilters"];
+  onChange: (filters: Partial<ReturnType<typeof useAppStore.getState>["taskFilters"]>) => void;
+  onClear: () => void;
+}) {
+  const { t } = useI18n();
+  const chips = [
+    { label: t("today.filterAll"), active: filters.status === "all" && !filters.priority && !filters.noDate, onClick: () => onChange({ status: "all", priority: null, noDate: false }) },
+    { label: t("today.activeOnly"), active: filters.status === "todo" && !filters.priority && !filters.noDate, onClick: () => onChange({ status: "todo", priority: null, noDate: false }) },
+    { label: t("today.completedOnly"), active: filters.status === "done", onClick: () => onChange({ status: "done", priority: null, noDate: false }) },
+    { label: "P1", active: filters.priority === "p1", onClick: () => onChange({ priority: filters.priority === "p1" ? null : "p1", status: "todo" }) },
+    { label: t("today.filterNoDate"), active: filters.noDate, onClick: () => onChange({ noDate: !filters.noDate, status: "todo" }) }
+  ];
+
+  return (
+    <div className="filter-chips" aria-label={t("today.filters")}>
+      {chips.map((chip) => (
+        <button className={chip.active ? "active" : ""} key={chip.label} type="button" onClick={chip.onClick}>
+          {chip.label}
+        </button>
+      ))}
+      <button type="button" onClick={onClear}>
+        {t("common.clear")}
+      </button>
+    </div>
   );
 }
 
@@ -409,25 +529,30 @@ function TaskRow({
   const { t } = useI18n();
   const toggleTask = useAppStore((state) => state.toggleTask);
   const selectTask = useAppStore((state) => state.selectTask);
+  const project = useAppStore((state) => state.projects.find((candidate) => candidate.id === task.projectId));
   const completedSubtasks = subtasks.filter((subtask) => subtask.completed).length;
   const activeReminders = reminders.filter((reminder) => !reminder.dismissedAt).length;
+  const overdue = Boolean(task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10) && !task.completed);
 
   return (
     <article className={`task-row ${task.completed ? "done" : ""}`}>
-      <button className="check-button" title={t("today.toggleComplete")} onClick={() => toggleTask(task.id)}>
+      <button className="check-button" type="button" title={t("today.toggleComplete")} onClick={() => toggleTask(task.id)}>
         {task.completed ? <Check size={15} /> : null}
       </button>
-      <div className="task-body">
+      <button className="task-body task-open-button" type="button" onClick={() => selectTask(task.id)} title={t("today.openTask")}>
         <div className="task-title-row">
           <h3>{task.title}</h3>
-          <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
-            {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
-          </Badge>
+          <div className="task-row-badges">
+            {task.priority ? <Badge tone={task.priority === "p1" ? "danger" : "neutral"}>{task.priority.toUpperCase()}</Badge> : null}
+            <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
+              {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
+            </Badge>
+          </div>
         </div>
         {task.description ? <p>{task.description}</p> : null}
         <div className="task-meta">
-          {task.priority ? <span>{task.priority.toUpperCase()}</span> : null}
-          {task.dueDate ? <span>{task.dueDate}</span> : null}
+          {project ? <span>{project.name}</span> : <span>{t("projects.inbox")}</span>}
+          {task.dueDate ? <span className={overdue ? "overdue" : ""}>{task.dueDate}</span> : null}
           {task.time ? <span>{task.time}</span> : null}
           {task.repeat ? (
             <span title={t("taskDetail.repeat")}>
@@ -451,9 +576,9 @@ function TaskRow({
             <span key={tag}>#{tag}</span>
           ))}
         </div>
-      </div>
-      <button className="icon-button small" title={t("today.openTask")} onClick={() => selectTask(task.id)}>
-        <ChevronRight size={16} />
+      </button>
+      <button className="icon-button small ghost" type="button" title={t("today.openTask")} onClick={() => selectTask(task.id)}>
+        <MoreHorizontal size={16} />
       </button>
     </article>
   );
@@ -490,6 +615,15 @@ function UpcomingList({ groups }: { groups: { nextSeven: LocalTask[]; later: Loc
   );
 }
 
+function EmptyState({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="empty-state">
+      <strong>{title}</strong>
+      {description ? <span>{description}</span> : null}
+    </div>
+  );
+}
+
 function ProjectsView() {
   const { t } = useI18n();
   const projects = useAppStore((state) => state.projects);
@@ -503,6 +637,10 @@ function ProjectsView() {
   const deleteProject = useAppStore((state) => state.deleteProject);
   const createTask = useAppStore((state) => state.createTask);
   const selectTask = useAppStore((state) => state.selectTask);
+  const searchQuery = useAppStore((state) => state.searchQuery);
+  const taskFilters = useAppStore((state) => state.taskFilters);
+  const setTaskFilters = useAppStore((state) => state.setTaskFilters);
+  const clearTaskFilters = useAppStore((state) => state.clearTaskFilters);
   const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
   const [projectEditDraft, setProjectEditDraft] = useState({ name: "", description: "" });
   const [taskDraft, setTaskDraft] = useState({ title: "", description: "" });
@@ -510,7 +648,15 @@ function ProjectsView() {
   const [taskFormMessage, setTaskFormMessage] = useState("");
   const [projectMode, setProjectMode] = useState<"list" | "board">("board");
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null;
-  const projectTasks = activeProject ? tasks.filter((task) => task.projectId === activeProject.id) : [];
+  const projectTasks = activeProject ? tasks.filter((task) => task.projectId === activeProject.id && !task.deletedAt) : [];
+  const visibleProjectTasks = activeProject
+    ? filterTasksForView(projectTasks, projects, searchQuery, { ...taskFilters, projectId: null })
+    : [];
+  const openProjectTasks = projectTasks.filter((task) => !task.completed);
+  const projectListFiltered =
+    Boolean(searchQuery.trim()) ||
+    taskFilters.status !== "todo" ||
+    Boolean(taskFilters.priority || taskFilters.type || taskFilters.tag || taskFilters.noDate);
 
   useEffect(() => {
     setProjectEditDraft({
@@ -595,7 +741,7 @@ function ProjectsView() {
         {projects.length === 0 ? <div className="empty-state">{t("projects.empty")}</div> : null}
         <div className="project-grid">
           {projects.map((project, index) => {
-            const count = tasks.filter((task) => task.projectId === project.id).length;
+            const count = tasks.filter((task) => task.projectId === project.id && !task.completed && !task.deletedAt).length;
             const color = index % 3 === 0 ? "indigo" : index % 3 === 1 ? "green" : "red";
             return (
               <article className={`project-card ${activeProject?.id === project.id ? "active" : ""}`} key={project.id}>
@@ -606,6 +752,7 @@ function ProjectsView() {
                   <div className="task-meta">
                     <span>{t("projects.linkedTasks", { count })}</span>
                     {activeProject?.id === project.id ? <span>{t("projects.activeProject")}</span> : null}
+                    <span>{t("common.open")}</span>
                   </div>
                 </button>
               </article>
@@ -614,6 +761,13 @@ function ProjectsView() {
         </div>
         {activeProject ? (
           <>
+            <section className="project-detail-header">
+              <div>
+                <h2>{activeProject.name}</h2>
+                <p>{activeProject.description || t("projects.noDescription")}</p>
+              </div>
+              <Badge>{t("today.metaOpenTasks", { count: openProjectTasks.length })}</Badge>
+            </section>
             <div className="project-view-tabs segmented">
               <button className={projectMode === "list" ? "active" : ""} type="button" onClick={() => setProjectMode("list")}>
                 <ListChecks size={16} />
@@ -628,7 +782,10 @@ function ProjectsView() {
               <BoardView projectId={activeProject.id} />
             ) : (
               <div className="task-list project-list-view">
-                {projectTasks.map((task) => (
+                <QuickAdd projectId={activeProject.id} />
+                <FilterChips filters={taskFilters} onChange={setTaskFilters} onClear={clearTaskFilters} />
+                {searchQuery.trim() ? <div className="search-summary">{t("today.searchResults", { count: visibleProjectTasks.length })}</div> : null}
+                {visibleProjectTasks.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -636,7 +793,12 @@ function ProjectsView() {
                     reminders={remindersByTaskId[task.id] ?? []}
                   />
                 ))}
-                {projectTasks.length === 0 ? <div className="empty-state">{t("today.noTasks")}</div> : null}
+                {visibleProjectTasks.length === 0 ? (
+                  <EmptyState
+                    title={projectListFiltered ? t("projects.noMatchingTasks") : t("projects.projectNoTasks")}
+                    description={projectListFiltered ? t("today.nothingFoundDescription") : t("projects.projectNoTasksDescription")}
+                  />
+                ) : null}
               </div>
             )}
           </>
@@ -1442,6 +1604,8 @@ function TaskDetailModal() {
   }
 
   const activeTask = task;
+  const activeProject = projects.find((project) => project.id === activeTask.projectId);
+  const completedSubtasks = subtasks.filter((subtask) => subtask.completed).length;
 
   async function saveTask() {
     if (!draft.title.trim()) {
@@ -1531,16 +1695,31 @@ function TaskDetailModal() {
         <div className="modal-head">
           <div>
             <h2>{t("taskDetail.title")}</h2>
-            <span>{activeTask.updatedAt.slice(0, 10)}</span>
+            <span>
+              {activeProject?.name ?? t("taskDetail.noProject")} · {draft.priority ? draft.priority.toUpperCase() : t("taskDetail.noPriority")} ·{" "}
+              {draft.dueDate || t("today.noDate")}
+            </span>
           </div>
           <button className="icon-button small" type="button" title={t("common.close")} onClick={() => selectTask(null)}>
             <X size={16} />
           </button>
         </div>
-        <label>
-          <span>{t("taskDetail.taskTitle")}</span>
-          <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-        </label>
+        <div className="task-detail-title-row">
+          <button
+            className="check-button"
+            type="button"
+            title={t("today.toggleComplete")}
+            onClick={() => (activeTask.completed ? uncompleteTask(activeTask.id) : completeTask(activeTask.id))}
+          >
+            {activeTask.completed ? <Check size={15} /> : null}
+          </button>
+          <input
+            className="task-title-input"
+            aria-label={t("taskDetail.taskTitle")}
+            value={draft.title}
+            onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+          />
+        </div>
         {detailMessage ? <div className="form-message">{detailMessage}</div> : null}
         <section className="detail-section">
           <PanelTitle icon={<FileText size={18} />} title={t("taskDetail.descriptionSection")} />
@@ -1549,7 +1728,7 @@ function TaskDetailModal() {
             <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
           </label>
         </section>
-        <div className="form-grid">
+        <div className="form-grid core-fields">
           <label>
             <span>{t("taskDetail.project")}</span>
             <select value={draft.projectId} onChange={(event) => setDraft({ ...draft, projectId: event.target.value })}>
@@ -1557,16 +1736,6 @@ function TaskDetailModal() {
               {projects.map((project) => (
                 <option value={project.id} key={project.id}>
                   {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{t("taskDetail.type")}</span>
-            <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value })}>
-              {["feature", "bug", "design", "code", "testing", "build"].map((type) => (
-                <option value={type} key={type}>
-                  {dynamicLabel(t, `taskTypes.${type}`, type)}
                 </option>
               ))}
             </select>
@@ -1590,26 +1759,9 @@ function TaskDetailModal() {
             <span>{t("taskDetail.dueTime")}</span>
             <input type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} />
           </label>
-          <label>
-            <span>{t("taskDetail.estimatedMinutes")}</span>
-            <input
-              min="0"
-              type="number"
-              value={draft.estimatedMinutes}
-              onChange={(event) => setDraft({ ...draft, estimatedMinutes: event.target.value })}
-            />
-          </label>
-          <label>
-            <span>{t("taskDetail.gameArea")}</span>
-            <input value={draft.gameArea} onChange={(event) => setDraft({ ...draft, gameArea: event.target.value })} />
-          </label>
-          <label>
-            <span>{t("taskDetail.severity")}</span>
-            <input value={draft.severity} onChange={(event) => setDraft({ ...draft, severity: event.target.value })} />
-          </label>
         </div>
         <section className="detail-section">
-          <PanelTitle icon={<ListChecks size={18} />} title={t("taskDetail.subtasks")} />
+          <PanelTitle icon={<ListChecks size={18} />} title={t("taskDetail.subtasksProgress", { done: completedSubtasks, total: subtasks.length })} />
           {subtasks.length > 0 ? (
             <div className="detail-list">
               {subtasks.map((subtask) => (
@@ -1629,7 +1781,7 @@ function TaskDetailModal() {
               ))}
             </div>
           ) : (
-            <div className="empty-state">{t("taskDetail.emptySubtasks")}</div>
+            <EmptyState title={t("taskDetail.emptySubtasks")} description={t("taskDetail.emptySubtasksDescription")} />
           )}
           <form className="inline-form" onSubmit={submitSubtask}>
             <input
@@ -1658,7 +1810,7 @@ function TaskDetailModal() {
               ))}
             </div>
           ) : (
-            <div className="empty-state">{t("taskDetail.emptyReminders")}</div>
+            <EmptyState title={t("taskDetail.emptyReminders")} description={t("taskDetail.emptyRemindersDescription")} />
           )}
           <form className="inline-form" onSubmit={submitReminder}>
             <input
@@ -1684,7 +1836,7 @@ function TaskDetailModal() {
             <option value="yearly">{t("taskDetail.repeatYearly")}</option>
             <option value="weekdays">{t("taskDetail.repeatWeekdays")}</option>
           </select>
-          {draft.repeat ? <span className="form-message">{t("taskDetail.repeatCompletionNote")}</span> : null}
+          <span className="form-message">{draft.repeat ? t("taskDetail.repeatCompletionNote") : t("taskDetail.noRepeat")}</span>
         </section>
 
         <section className="detail-section">
@@ -1704,7 +1856,7 @@ function TaskDetailModal() {
               );
             })}
           </div>
-          {tags.length === 0 ? <div className="empty-state">{t("taskDetail.emptyTags")}</div> : null}
+          {tags.length === 0 ? <EmptyState title={t("taskDetail.emptyTags")} /> : null}
           <form className="inline-form" onSubmit={submitTag}>
             <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder={t("taskDetail.tagPlaceholder")} />
             <Button type="submit">
@@ -1718,41 +1870,71 @@ function TaskDetailModal() {
           </label>
         </section>
 
-        <section className="detail-section">
-          <PanelTitle icon={<MoreHorizontal size={18} />} title={t("taskDetail.additional")} />
+        <details className="detail-section detail-accordion">
+          <summary>
+            <MoreHorizontal size={18} />
+            {t("taskDetail.additional")}
+          </summary>
+          <div className="form-grid">
+            <label>
+              <span>{t("taskDetail.type")}</span>
+              <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value })}>
+                {["feature", "bug", "design", "code", "testing", "build"].map((type) => (
+                  <option value={type} key={type}>
+                    {dynamicLabel(t, `taskTypes.${type}`, type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{t("taskDetail.gameArea")}</span>
+              <input value={draft.gameArea} onChange={(event) => setDraft({ ...draft, gameArea: event.target.value })} />
+            </label>
+            <label>
+              <span>{t("taskDetail.severity")}</span>
+              <input value={draft.severity} onChange={(event) => setDraft({ ...draft, severity: event.target.value })} />
+            </label>
+            <label>
+              <span>{t("taskDetail.estimatedMinutes")}</span>
+              <input
+                min="0"
+                type="number"
+                value={draft.estimatedMinutes}
+                onChange={(event) => setDraft({ ...draft, estimatedMinutes: event.target.value })}
+              />
+            </label>
+          </div>
           <label>
             <span>{t("taskDetail.buildVersion")}</span>
             <input value={draft.buildVersion} onChange={(event) => setDraft({ ...draft, buildVersion: event.target.value })} />
           </label>
-          <label>
-            <span>{t("taskDetail.stepsToReproduce")}</span>
-            <textarea
-              value={draft.stepsToReproduce}
-              onChange={(event) => setDraft({ ...draft, stepsToReproduce: event.target.value })}
-            />
-          </label>
-          <label>
-            <span>{t("taskDetail.expectedResult")}</span>
-            <textarea value={draft.expectedResult} onChange={(event) => setDraft({ ...draft, expectedResult: event.target.value })} />
-          </label>
-          <label>
-            <span>{t("taskDetail.actualResult")}</span>
-            <textarea value={draft.actualResult} onChange={(event) => setDraft({ ...draft, actualResult: event.target.value })} />
-          </label>
-        </section>
+          {draft.type === "bug" ? (
+            <>
+              <label>
+                <span>{t("taskDetail.stepsToReproduce")}</span>
+                <textarea
+                  value={draft.stepsToReproduce}
+                  onChange={(event) => setDraft({ ...draft, stepsToReproduce: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>{t("taskDetail.expectedResult")}</span>
+                <textarea value={draft.expectedResult} onChange={(event) => setDraft({ ...draft, expectedResult: event.target.value })} />
+              </label>
+              <label>
+                <span>{t("taskDetail.actualResult")}</span>
+                <textarea value={draft.actualResult} onChange={(event) => setDraft({ ...draft, actualResult: event.target.value })} />
+              </label>
+            </>
+          ) : null}
+        </details>
         <div className="toolbar modal-actions">
           <Button type="button" onClick={saveTask}>
             <Pencil size={16} />
             {t("common.save")}
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => (activeTask.completed ? uncompleteTask(activeTask.id) : completeTask(activeTask.id))}
-          >
-            <Check size={16} />
-            {activeTask.completed ? t("taskDetail.reopen") : t("taskDetail.complete")}
-          </Button>
+        </div>
+        <div className="danger-zone">
           <Button type="button" variant="danger" onClick={remove}>
             <Trash2 size={16} />
             {t("common.delete")}
@@ -1765,7 +1947,7 @@ function TaskDetailModal() {
 
 function MobileNav({ activeView, setActiveView }: { activeView: ViewId; setActiveView: (view: ViewId) => void }) {
   const { t } = useI18n();
-  const mobileItems = navItems.filter((item) => ["today", "projects", "calendar", "habits"].includes(item.id));
+  const mobileItems = navItems.filter((item) => ["today", "inbox", "projects", "notes"].includes(item.id));
 
   return (
     <nav className="mobile-nav" aria-label={t("shell.mobileNavigation")}>
@@ -1861,67 +2043,6 @@ function statusLabel(t: TFunction, status: string): string {
 
 function featureLabel(t: TFunction, featureKey: string): string {
   return dynamicLabel(t, `subscription.features.${featureKey}`, premiumFeatures[featureKey as keyof typeof premiumFeatures]?.label ?? featureKey);
-}
-
-function filterTasks(
-  tasks: LocalTask[],
-  projects: LocalProject[],
-  searchQuery: string,
-  filters: ReturnType<typeof useAppStore.getState>["taskFilters"]
-) {
-  const query = searchQuery.trim().toLowerCase();
-  const projectById = new Map(projects.map((project) => [project.id, project]));
-  return tasks.filter((task) => {
-    if (filters.projectId && task.projectId !== filters.projectId) {
-      return false;
-    }
-    if (filters.status === "todo" && task.completed) {
-      return false;
-    }
-    if (filters.status === "done" && !task.completed) {
-      return false;
-    }
-    if (filters.priority && task.priority !== filters.priority) {
-      return false;
-    }
-    if (filters.type && task.type !== filters.type) {
-      return false;
-    }
-    if (filters.tag && !task.tags.includes(filters.tag)) {
-      return false;
-    }
-    if (!query) {
-      return true;
-    }
-
-    return [task.title, task.description, projectById.get(task.projectId ?? "")?.name, task.gameArea, task.buildVersion, ...task.tags]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
-      .includes(query);
-  });
-}
-
-function groupTodayTasks(tasks: LocalTask[]) {
-  const today = new Date().toISOString().slice(0, 10);
-  return {
-    overdue: tasks.filter((task) => !task.completed && task.dueDate && task.dueDate < today),
-    today: tasks.filter((task) => task.dueDate === today),
-    noDate: tasks.filter((task) => !task.dueDate)
-  };
-}
-
-function groupUpcomingTasks(tasks: LocalTask[]) {
-  const today = new Date();
-  const todayKey = today.toISOString().slice(0, 10);
-  const end = new Date(today);
-  end.setDate(today.getDate() + 7);
-  const endKey = end.toISOString().slice(0, 10);
-  const dated = tasks.filter((task) => !task.completed && task.dueDate && task.dueDate > todayKey);
-  return {
-    nextSeven: dated.filter((task) => task.dueDate && task.dueDate <= endKey),
-    later: dated.filter((task) => task.dueDate && task.dueDate > endKey)
-  };
 }
 
 function repeatLabel(t: TFunction, repeat: string) {

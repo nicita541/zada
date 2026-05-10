@@ -104,6 +104,15 @@ button {
   gap: 4px;
 }
 
+.nav-section-label {
+  margin: 18px 8px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .nav-button,
 .mobile-nav button {
   border: 0;
@@ -115,6 +124,8 @@ button {
   min-height: 40px;
   border-radius: 8px;
   padding: 0 10px;
+  width: 100%;
+  text-align: left;
 }
 
 .nav-button.active,
@@ -122,6 +133,15 @@ button {
 .mobile-nav button.active {
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+.nav-button-muted {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.nav-button-muted:not(.active) {
+  opacity: 0.74;
 }
 
 .workspace {
@@ -278,11 +298,32 @@ section {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px;
-  padding: 14px;
+  padding: 12px;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.task-row:hover {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
 .task-row.done {
   opacity: 0.62;
+}
+
+.task-row.done h3 {
+  text-decoration: line-through;
+}
+
+.task-open-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
 }
 
 .task-title-row,
@@ -344,6 +385,36 @@ section {
   color: var(--success);
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.filter-chips button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0 11px;
+}
+
+.filter-chips button.active,
+.filter-chips button:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.search-summary {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .ui-button,
@@ -527,6 +598,7 @@ section {
 
 .project-card.active {
   border-color: var(--primary);
+  box-shadow: 0 14px 34px rgba(99, 102, 241, 0.14);
 }
 
 .project-card-button,
@@ -593,6 +665,29 @@ section {
 
 .project-list-view {
   margin-top: 0;
+  gap: 10px;
+}
+
+.project-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.project-detail-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.project-detail-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
 }
 
 .board-view {
@@ -602,11 +697,12 @@ section {
 .board-columns {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 300px);
-  gap: 12px;
+  grid-auto-columns: minmax(280px, 320px);
+  gap: 14px;
   overflow-x: auto;
   align-items: start;
-  padding-bottom: 8px;
+  padding: 2px 2px 12px;
+  scroll-snap-type: x proximity;
 }
 
 .board-column {
@@ -616,8 +712,9 @@ section {
   max-height: calc(100vh - 240px);
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface-2);
-  padding: 10px;
+  background: color-mix(in srgb, var(--surface-2) 82%, var(--surface));
+  padding: 12px;
+  scroll-snap-align: start;
 }
 
 .board-column.dragging,
@@ -684,6 +781,15 @@ section {
   padding: 11px;
   text-align: left;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.board-task-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
 .board-task-card.done {
@@ -1059,12 +1165,18 @@ section {
 
 .empty-state {
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
   color: var(--muted);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 14px;
   margin-top: 12px;
   font-size: 13px;
+  display: grid;
+  gap: 4px;
+}
+
+.empty-state strong {
+  color: var(--text);
 }
 
 .reminder-banner {
@@ -1119,6 +1231,12 @@ section {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  background: var(--surface);
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-head h2 {
@@ -1137,6 +1255,18 @@ section {
   gap: 6px;
 }
 
+.task-detail-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.task-title-input {
+  font-size: 22px;
+  font-weight: 750;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1152,6 +1282,15 @@ section {
   gap: 10px;
   border-top: 1px solid var(--border);
   padding-top: 12px;
+}
+
+.detail-accordion summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .detail-section .panel-title {
@@ -1218,6 +1357,13 @@ section {
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-soft);
+}
+
+.danger-zone {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
 }
 
 .switch {
