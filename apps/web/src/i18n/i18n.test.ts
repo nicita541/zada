@@ -27,6 +27,18 @@ describe("i18n", () => {
     expect(translate("en", "taskDetail.buildVersion")).toBe("Build version");
   });
 
+  it("contains required Russian polish strings for completed MVP modules", () => {
+    expect(translate("ru", "board.listView")).toBe("Список");
+    expect(translate("ru", "board.boardView")).toBe("Доска");
+    expect(translate("ru", "projects.columns.backlog")).toBe("Бэклог");
+    expect(translate("ru", "projects.columns.todo")).toBe("К выполнению");
+    expect(translate("ru", "projects.columns.inProgress")).toBe("В работе");
+    expect(translate("ru", "projects.columns.review")).toBe("На проверке");
+    expect(translate("ru", "taskDetail.emptySubtasks")).toBe("Подзадач пока нет");
+    expect(translate("ru", "taskDetail.emptyReminders")).toBe("Напоминаний пока нет");
+    expect(translate("ru", "taskDetail.emptyTags")).toBe("Тегов пока нет");
+  });
+
   it("returns the key for a missing key", () => {
     expect(translate("ru", "missing.key" as never)).toBe("missing.key");
   });

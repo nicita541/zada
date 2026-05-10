@@ -32,6 +32,7 @@ describe("board helpers", () => {
     expect(effectiveTaskColumnId({ id: "task-1", columnId: null }, columns)).toBe("backlog");
     expect(effectiveTaskColumnId({ id: "task-2", columnId: "missing" }, columns)).toBe("backlog");
     expect(backlogColumnId([{ id: "todo", name: "Todo", position: 1 }])).toBe("todo");
+    expect(backlogColumnId([{ id: "ru-backlog", name: "Бэклог", position: 0 }])).toBe("ru-backlog");
   });
 
   it("moves tasks within and between columns", () => {

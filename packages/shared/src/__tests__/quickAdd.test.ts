@@ -36,5 +36,11 @@ describe("parseQuickAdd", () => {
       title: "Plan build",
       repeat: "weekdays"
     });
+
+    expect(parseQuickAdd("Проверить билд по будням p2")).toMatchObject({
+      title: "Проверить билд",
+      repeat: "weekdays",
+      priority: "p2"
+    });
   });
 });

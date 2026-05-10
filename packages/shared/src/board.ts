@@ -50,7 +50,11 @@ export function shouldCreateDefaultColumns(columns: Array<Pick<BoardColumnLike, 
 
 export function backlogColumnId(columns: BoardColumnLike[]): string | null {
   const activeColumns = columns.filter((column) => !column.deletedAt).sort((left, right) => left.position - right.position);
-  return activeColumns.find((column) => column.name.toLowerCase() === "backlog")?.id ?? activeColumns[0]?.id ?? null;
+  return activeColumns.find((column) => isBacklogName(column.name))?.id ?? activeColumns[0]?.id ?? null;
+}
+
+function isBacklogName(name: string): boolean {
+  return ["backlog", "бэклог"].includes(name.trim().toLowerCase());
 }
 
 export function effectiveTaskColumnId(task: BoardTaskLike, columns: BoardColumnLike[]): string | null {

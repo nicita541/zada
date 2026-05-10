@@ -178,8 +178,8 @@ function BoardColumn({
   };
 
   useEffect(() => {
-    setName(column.name);
-  }, [column.name]);
+    setName(localizedColumnName(t, column.name));
+  }, [column.name, t]);
 
   async function submitTask(event: FormEvent) {
     event.preventDefault();
@@ -193,10 +193,17 @@ function BoardColumn({
 
   async function commitName() {
     const trimmed = name.trim();
-    if (trimmed && trimmed !== column.name) {
+    const displayName = localizedColumnName(t, column.name);
+    if (trimmed && trimmed !== column.name && trimmed !== displayName) {
       await onUpdateColumn(column.id, { name: trimmed });
     } else {
-      setName(column.name);
+      setName(displayName);
+    }
+  }
+
+  async function removeColumn() {
+    if (window.confirm(t("board.confirmDeleteColumn"))) {
+      await onDeleteColumn(column.id);
     }
   }
 
@@ -214,7 +221,7 @@ function BoardColumn({
           onChange={(event) => setName(event.target.value)}
         />
         <Badge>{t("board.taskCount", { count: tasks.length })}</Badge>
-        <button className="icon-button small" type="button" title={t("board.deleteColumn")} onClick={() => onDeleteColumn(column.id)}>
+        <button className="icon-button small" type="button" title={t("board.deleteColumn")} onClick={removeColumn}>
           <Trash2 size={15} />
         </button>
       </div>
@@ -357,4 +364,18 @@ function dndTransform(transform: { x: number; y: number } | null) {
 function dynamicLabel(t: (key: TranslationKey) => string, key: string, fallback: string): string {
   const translated = t(key as TranslationKey);
   return translated === key ? fallback : translated;
+}
+
+function localizedColumnName(t: (key: TranslationKey) => string, name: string): string {
+  const keyByName: Record<string, TranslationKey> = {
+    ideas: "projects.columns.ideas",
+    backlog: "projects.columns.backlog",
+    todo: "projects.columns.todo",
+    "in progress": "projects.columns.inProgress",
+    review: "projects.columns.review",
+    testing: "projects.columns.testing",
+    done: "projects.columns.done"
+  };
+  const key = keyByName[name.trim().toLowerCase()];
+  return key ? t(key) : name;
 }

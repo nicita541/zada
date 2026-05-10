@@ -169,6 +169,11 @@ function AppShell() {
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder={t("common.searchPlaceholder")}
             />
+            {searchQuery ? (
+              <button className="icon-button small ghost" type="button" title={t("common.clearSearch")} onClick={() => setSearchQuery("")}>
+                <X size={14} />
+              </button>
+            ) : null}
           </div>
           <div className="topbar-actions">
             <SyncIndicator state={syncState} />
@@ -424,13 +429,24 @@ function TaskRow({
           {task.priority ? <span>{task.priority.toUpperCase()}</span> : null}
           {task.dueDate ? <span>{task.dueDate}</span> : null}
           {task.time ? <span>{task.time}</span> : null}
-          {task.repeat ? <span>{repeatLabel(t, task.repeat)}</span> : null}
+          {task.repeat ? (
+            <span title={t("taskDetail.repeat")}>
+              <Repeat2 size={12} />
+              {repeatLabel(t, task.repeat)}
+            </span>
+          ) : null}
           {subtasks.length > 0 ? (
-            <span>
+            <span title={t("taskDetail.subtasks")}>
+              <ListChecks size={12} />
               {completedSubtasks}/{subtasks.length}
             </span>
           ) : null}
-          {activeReminders > 0 ? <span>{activeReminders}</span> : null}
+          {activeReminders > 0 ? (
+            <span title={t("taskDetail.reminders")}>
+              <Bell size={12} />
+              {activeReminders}
+            </span>
+          ) : null}
           {task.tags.map((tag) => (
             <span key={tag}>#{tag}</span>
           ))}
@@ -490,6 +506,8 @@ function ProjectsView() {
   const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
   const [projectEditDraft, setProjectEditDraft] = useState({ name: "", description: "" });
   const [taskDraft, setTaskDraft] = useState({ title: "", description: "" });
+  const [projectFormMessage, setProjectFormMessage] = useState("");
+  const [taskFormMessage, setTaskFormMessage] = useState("");
   const [projectMode, setProjectMode] = useState<"list" | "board">("board");
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null;
   const projectTasks = activeProject ? tasks.filter((task) => task.projectId === activeProject.id) : [];
@@ -503,15 +521,22 @@ function ProjectsView() {
 
   async function submitProject(event: FormEvent) {
     event.preventDefault();
+    if (!projectDraft.name.trim()) {
+      setProjectFormMessage(t("projects.nameRequired"));
+      return;
+    }
+
     const project = await createProject(projectDraft);
     if (project.name) {
       setProjectDraft({ name: "", description: "" });
+      setProjectFormMessage("");
     }
   }
 
   async function submitTask(event: FormEvent) {
     event.preventDefault();
     if (!taskDraft.title.trim() || !activeProject) {
+      setTaskFormMessage(t("projects.taskTitleRequired"));
       return;
     }
 
@@ -522,6 +547,7 @@ function ProjectsView() {
       tags: []
     });
     setTaskDraft({ title: "", description: "" });
+    setTaskFormMessage("");
   }
 
   async function submitProjectEdit(event: FormEvent) {
@@ -535,6 +561,10 @@ function ProjectsView() {
 
   async function removeProject() {
     if (!activeProject) {
+      return;
+    }
+
+    if (!window.confirm(t("projects.confirmDelete"))) {
       return;
     }
 
@@ -561,6 +591,7 @@ function ProjectsView() {
             {t("projects.createProject")}
           </Button>
         </form>
+        {projectFormMessage ? <div className="form-message">{projectFormMessage}</div> : null}
         {projects.length === 0 ? <div className="inline-alert">{t("projects.empty")}</div> : null}
         <div className="project-grid">
           {projects.map((project, index) => {
@@ -654,6 +685,7 @@ function ProjectsView() {
                   {t("projects.addTask")}
                 </Button>
               </form>
+              {taskFormMessage ? <div className="form-message">{taskFormMessage}</div> : null}
               <div className="compact-list project-task-list">
                 {projectTasks.map((task) => (
                   <button className="compact-row compact-button" key={task.id} type="button" onClick={() => selectTask(task.id)}>
@@ -1056,22 +1088,40 @@ function AuthScreen() {
   const [password, setPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function selectMode(nextMode: typeof mode) {
+    setMode(nextMode);
+    setMessage("");
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const normalizedEmail = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setMessage(t("auth.invalidEmail"));
+      return;
+    }
+    if (mode !== "forgot" && !password) {
+      setMessage(t("auth.passwordRequired"));
+      return;
+    }
+
+    setIsSubmitting(true);
+    setMessage("");
     try {
       if (mode === "login") {
-        await login({ email, password });
+        await login({ email: normalizedEmail, password });
         return;
       }
 
       if (mode === "register") {
-        await register({ email, password, name });
+        await register({ email: normalizedEmail, password, name });
         return;
       }
 
       if (mode === "forgot") {
-        const token = await forgotPassword(email);
+        const token = await forgotPassword(normalizedEmail);
         if (token) {
           setResetToken(token);
           setMode("reset");
@@ -1082,13 +1132,15 @@ function AuthScreen() {
         return;
       }
 
-      await resetPassword({ email, resetToken, password });
+      await resetPassword({ email: normalizedEmail, resetToken, password });
       setMode("login");
       setPassword("");
       setResetToken("");
       setMessage(t("auth.passwordResetDone"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("settings.authFailed"));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -1104,13 +1156,13 @@ function AuthScreen() {
         </div>
         <form className="auth-form" onSubmit={submit}>
           <div className="segmented auth-segmented">
-            <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+            <button type="button" className={mode === "login" ? "active" : ""} onClick={() => selectMode("login")}>
               {t("settings.login")}
             </button>
-            <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
+            <button type="button" className={mode === "register" ? "active" : ""} onClick={() => selectMode("register")}>
               {t("settings.register")}
             </button>
-            <button type="button" className={mode === "forgot" || mode === "reset" ? "active" : ""} onClick={() => setMode("forgot")}>
+            <button type="button" className={mode === "forgot" || mode === "reset" ? "active" : ""} onClick={() => selectMode("forgot")}>
               {t("auth.recovery")}
             </button>
           </div>
@@ -1138,9 +1190,11 @@ function AuthScreen() {
               type="password"
             />
           ) : null}
-          <Button type="submit">
+          <Button type="submit" disabled={isSubmitting}>
             <KeyRound size={16} />
-            {mode === "register"
+            {isSubmitting
+              ? t("common.loading")
+              : mode === "register"
               ? t("settings.register")
               : mode === "forgot"
                 ? t("auth.sendReset")
@@ -1350,6 +1404,7 @@ function TaskDetailModal() {
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [reminderDraft, setReminderDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
+  const [detailMessage, setDetailMessage] = useState("");
 
   useEffect(() => {
     if (!task) {
@@ -1389,6 +1444,11 @@ function TaskDetailModal() {
   const activeTask = task;
 
   async function saveTask() {
+    if (!draft.title.trim()) {
+      setDetailMessage(t("taskDetail.titleRequired"));
+      return;
+    }
+
     await updateTask(activeTask.id, {
       title: draft.title,
       description: draft.description,
@@ -1410,14 +1470,34 @@ function TaskDetailModal() {
         .map((tag) => tag.trim())
         .filter(Boolean)
     });
+    setDetailMessage("");
   }
 
   async function remove() {
+    if (!window.confirm(t("taskDetail.confirmDelete"))) {
+      return;
+    }
+
     await deleteTask(activeTask.id);
+  }
+
+  async function removeSubtask(id: string) {
+    if (window.confirm(t("common.confirmDelete"))) {
+      await deleteSubtask(id);
+    }
+  }
+
+  async function removeReminder(id: string) {
+    if (window.confirm(t("common.confirmDelete"))) {
+      await deleteReminder(id);
+    }
   }
 
   async function submitSubtask(event: FormEvent) {
     event.preventDefault();
+    if (!subtaskDraft.trim()) {
+      return;
+    }
     await createSubtask(activeTask.id, subtaskDraft);
     setSubtaskDraft("");
   }
@@ -1425,14 +1505,19 @@ function TaskDetailModal() {
   async function submitReminder(event: FormEvent) {
     event.preventDefault();
     if (!reminderDraft) {
+      setDetailMessage(t("taskDetail.reminderRequired"));
       return;
     }
     await createReminder(activeTask.id, new Date(reminderDraft).toISOString());
     setReminderDraft("");
+    setDetailMessage("");
   }
 
   async function submitTag(event: FormEvent) {
     event.preventDefault();
+    if (!tagDraft.trim()) {
+      return;
+    }
     const tag = await createTag({ name: tagDraft });
     if (tag) {
       await assignTaskTag(activeTask.id, tag.id);
@@ -1456,6 +1541,7 @@ function TaskDetailModal() {
           <span>{t("taskDetail.taskTitle")}</span>
           <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
         </label>
+        {detailMessage ? <div className="form-message">{detailMessage}</div> : null}
         <section className="detail-section">
           <PanelTitle icon={<FileText size={18} />} title={t("taskDetail.descriptionSection")} />
           <label>
@@ -1527,7 +1613,7 @@ function TaskDetailModal() {
           {subtasks.length > 0 ? (
             <div className="detail-list">
               {subtasks.map((subtask) => (
-                <div className="detail-list-row" key={subtask.id}>
+                <div className={`detail-list-row ${subtask.completed ? "done" : ""}`} key={subtask.id}>
                   <label className="inline-check">
                     <input
                       type="checkbox"
@@ -1536,7 +1622,7 @@ function TaskDetailModal() {
                     />
                     <span>{subtask.title}</span>
                   </label>
-                  <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => deleteSubtask(subtask.id)}>
+                  <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => removeSubtask(subtask.id)}>
                     <Trash2 size={15} />
                   </button>
                 </div>
@@ -1565,7 +1651,7 @@ function TaskDetailModal() {
               {reminders.map((reminder) => (
                 <div className="detail-list-row" key={reminder.id}>
                   <span>{new Date(reminder.remindAt).toLocaleString()}</span>
-                  <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => deleteReminder(reminder.id)}>
+                  <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => removeReminder(reminder.id)}>
                     <Trash2 size={15} />
                   </button>
                 </div>
@@ -1598,6 +1684,7 @@ function TaskDetailModal() {
             <option value="yearly">{t("taskDetail.repeatYearly")}</option>
             <option value="weekdays">{t("taskDetail.repeatWeekdays")}</option>
           </select>
+          {draft.repeat ? <span className="form-message">{t("taskDetail.repeatCompletionNote")}</span> : null}
         </section>
 
         <section className="detail-section">
@@ -1617,6 +1704,7 @@ function TaskDetailModal() {
               );
             })}
           </div>
+          {tags.length === 0 ? <div className="inline-alert">{t("taskDetail.emptyTags")}</div> : null}
           <form className="inline-form" onSubmit={submitTag}>
             <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder={t("taskDetail.tagPlaceholder")} />
             <Button type="submit">

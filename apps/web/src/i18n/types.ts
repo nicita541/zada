@@ -18,6 +18,8 @@ export interface TranslationDictionary {
     error: string;
     exportJson: string;
     clear: string;
+    clearSearch: string;
+    confirmDelete: string;
     loading: string;
     local: string;
     more: string;
@@ -57,6 +59,8 @@ export interface TranslationDictionary {
   auth: {
     loadingSession: string;
     sessionRequired: string;
+    invalidEmail: string;
+    passwordRequired: string;
     loginTitle: string;
     createAccount: string;
     recoverPassword: string;
@@ -101,6 +105,9 @@ export interface TranslationDictionary {
     gameProject: string;
     bugTracker: string;
     linkedTasks: string;
+    nameRequired: string;
+    confirmDelete: string;
+    taskTitleRequired: string;
     namePlaceholder: string;
     descriptionPlaceholder: string;
     createProject: string;
@@ -117,6 +124,7 @@ export interface TranslationDictionary {
       backlog: string;
       todo: string;
       inProgress: string;
+      review: string;
       testing: string;
       done: string;
     };
@@ -130,6 +138,7 @@ export interface TranslationDictionary {
     taskPlaceholder: string;
     emptyColumn: string;
     deleteColumn: string;
+    confirmDeleteColumn: string;
     dragColumn: string;
     dragTask: string;
     subtasks: string;
@@ -233,6 +242,8 @@ export interface TranslationDictionary {
   taskDetail: {
     title: string;
     taskTitle: string;
+    titleRequired: string;
+    confirmDelete: string;
     description: string;
     project: string;
     noProject: string;
@@ -246,6 +257,7 @@ export interface TranslationDictionary {
     severity: string;
     buildVersion: string;
     tags: string;
+    emptyTags: string;
     tagPlaceholder: string;
     addTag: string;
     descriptionSection: string;
@@ -254,8 +266,10 @@ export interface TranslationDictionary {
     emptySubtasks: string;
     reminders: string;
     reminderAt: string;
+    reminderRequired: string;
     emptyReminders: string;
     repeat: string;
+    repeatCompletionNote: string;
     repeatNone: string;
     repeatDaily: string;
     repeatWeekly: string;

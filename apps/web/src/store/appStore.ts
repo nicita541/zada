@@ -331,7 +331,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Local logout must still work when the API is unavailable.
     }
     clearTokens();
-    set({ authStatus: "unauthenticated", currentUser: null, authError: null, selectedTaskId: null });
+    set({
+      authStatus: "unauthenticated",
+      currentUser: null,
+      authError: null,
+      activeView: "today",
+      selectedTaskId: null,
+      searchQuery: "",
+      taskFilters: defaultTaskFilters,
+      dueReminders: []
+    });
   },
   forgotPassword: async (email) => {
     try {
