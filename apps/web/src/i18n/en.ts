@@ -119,6 +119,23 @@ export const en = {
       done: "Done"
     }
   },
+  board: {
+    listView: "List",
+    boardView: "Board",
+    addColumn: "Add column",
+    columnName: "Column name",
+    columnPlaceholder: "Column",
+    taskPlaceholder: "Task",
+    emptyColumn: "No tasks",
+    deleteColumn: "Delete column",
+    dragColumn: "Move column",
+    dragTask: "Move task",
+    subtasks: "Subtasks",
+    reminders: "Reminders",
+    repeat: "Repeat",
+    noTasks: "No board tasks",
+    taskCount: "{count}"
+  },
   calendar: {
     meta: "Month, week, and agenda foundation",
     agenda: "Agenda",

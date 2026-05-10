@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { getNextDueDate } from "@zada/shared";
+import { defaultBoardColumnsForProject, getNextDueDate } from "@zada/shared";
 import { Router } from "express";
 import { z } from "zod";
 import { currentUserId, requireAuth } from "../auth/middleware";
@@ -8,7 +8,6 @@ import { prisma } from "../prisma";
 
 const router = Router();
 router.use(requireAuth);
-const defaultBoardColumns = ["Backlog", "Todo", "In Progress", "Done"];
 
 router.get(
   "/projects",
@@ -46,10 +45,11 @@ router.post(
         description: input.description,
         type: input.type,
         columns: {
-          create: defaultBoardColumns.map((name, position) => ({
+          create: defaultBoardColumnsForProject(input.type).map((column, position) => ({
             userId,
             workspaceId,
-            name,
+            name: column.name,
+            color: column.color,
             position
           }))
         }
@@ -126,21 +126,135 @@ router.post(
       .object({
         projectId: z.string().uuid(),
         name: z.string().min(1),
+        color: z.string().nullable().optional(),
         position: z.number().int().default(0),
         workspaceId: z.string().uuid().optional()
       })
       .parse(req.body);
+    const project = await projectForUser(userId, input.projectId);
 
     const column = await prisma.boardColumn.create({
       data: {
         userId,
-        workspaceId: await workspaceIdFor(userId, input.workspaceId),
-        projectId: input.projectId,
+        workspaceId: project.workspaceId,
+        projectId: project.id,
         name: input.name,
+        color: input.color ?? null,
         position: input.position
       }
     });
     res.status(201).json(column);
+  })
+);
+
+router.get(
+  "/projects/:projectId/columns",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const project = await projectForUser(userId, routeId(req.params.projectId));
+    const columns = await prisma.boardColumn.findMany({
+      where: { userId, projectId: project.id, deletedAt: null },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }]
+    });
+    res.json({ columns });
+  })
+);
+
+router.post(
+  "/projects/:projectId/columns",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const project = await projectForUser(userId, routeId(req.params.projectId));
+    const input = columnInputSchema.parse(req.body);
+    const column = await prisma.boardColumn.create({
+      data: {
+        id: input.id,
+        userId,
+        workspaceId: project.workspaceId,
+        projectId: project.id,
+        name: input.name,
+        color: input.color ?? null,
+        position: input.position
+      }
+    });
+    res.status(201).json(column);
+  })
+);
+
+router.post(
+  "/columns/reorder",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const input = reorderColumnsSchema.parse(req.body);
+    const project = await projectForUser(userId, input.projectId);
+    const items =
+      input.items ??
+      input.orderedColumnIds?.map((id, position) => ({
+        id,
+        position
+      })) ??
+      [];
+
+    const columns = await prisma.boardColumn.findMany({
+      where: { userId, projectId: project.id, id: { in: items.map((item) => item.id) }, deletedAt: null },
+      select: { id: true }
+    });
+    const ownedIds = new Set(columns.map((column) => column.id));
+    if (items.some((item) => !ownedIds.has(item.id))) {
+      throw new HttpError(404, "Column not found");
+    }
+
+    await prisma.$transaction(
+      items.map((item) =>
+        prisma.boardColumn.update({
+          where: { id: item.id },
+          data: { position: item.position }
+        })
+      )
+    );
+
+    const updated = await prisma.boardColumn.findMany({
+      where: { userId, projectId: project.id, deletedAt: null },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }]
+    });
+    res.json({ columns: updated });
+  })
+);
+
+router.patch(
+  "/columns/:id",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const column = await columnForUser(userId, routeId(req.params.id));
+    const input = columnInputSchema.partial().parse(req.body);
+    const updated = await prisma.boardColumn.update({
+      where: { id: column.id },
+      data: {
+        name: input.name,
+        color: input.color,
+        position: input.position
+      }
+    });
+    res.json(updated);
+  })
+);
+
+router.delete(
+  "/columns/:id",
+  asyncHandler(async (req, res) => {
+    const userId = currentUserId(req);
+    const column = await columnForUser(userId, routeId(req.params.id));
+    await prisma.$transaction([
+      prisma.task.updateMany({
+        where: { userId, projectId: column.projectId, columnId: column.id, deletedAt: null },
+        data: { columnId: null }
+      }),
+      prisma.boardColumn.update({
+        where: { id: column.id },
+        data: { deletedAt: new Date() }
+      })
+    ]);
+    res.status(204).end();
   })
 );
 
@@ -293,18 +407,72 @@ router.post(
     const userId = currentUserId(req);
     const input = z
       .object({
-        items: z.array(
+        projectId: z.string().uuid().optional(),
+        moves: z
+          .array(
+            z.object({
+              taskId: z.string().uuid(),
+              columnId: z.string().uuid().nullable(),
+              position: z.number().int().min(0)
+            })
+          )
+          .optional(),
+        items: z
+          .array(
           z.object({
             id: z.string().uuid(),
             position: z.number().int().min(0),
             columnId: z.string().uuid().nullable().optional()
           })
-        )
+          )
+          .optional()
       })
       .parse(req.body);
+    const moves =
+      input.moves?.map((move) => ({ id: move.taskId, columnId: move.columnId, position: move.position })) ??
+      input.items ??
+      [];
+
+    if (moves.length === 0) {
+      throw new HttpError(400, "No tasks to reorder");
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { id: { in: moves.map((move) => move.id) }, userId, deletedAt: null },
+      select: { id: true, projectId: true }
+    });
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    if (moves.some((move) => !taskById.has(move.id))) {
+      throw new HttpError(404, "Task not found");
+    }
+
+    const projectId = input.projectId ?? tasks[0]?.projectId ?? null;
+    if (input.projectId) {
+      await projectForUser(userId, input.projectId);
+      if (tasks.some((task) => task.projectId !== input.projectId)) {
+        throw new HttpError(400, "Task does not belong to project");
+      }
+    }
+
+    const columnIds = Array.from(new Set(moves.map((move) => move.columnId).filter((id): id is string => Boolean(id))));
+    if (columnIds.length > 0) {
+      const columns = await prisma.boardColumn.findMany({
+        where: {
+          id: { in: columnIds },
+          userId,
+          deletedAt: null,
+          projectId: projectId ?? undefined
+        },
+        select: { id: true, projectId: true }
+      });
+      const ownedColumnIds = new Set(columns.map((column) => column.id));
+      if (columnIds.some((columnId) => !ownedColumnIds.has(columnId))) {
+        throw new HttpError(404, "Column not found");
+      }
+    }
 
     await prisma.$transaction(
-      input.items.map((item) =>
+      moves.map((item) =>
         prisma.task.update({
           where: { id: item.id, userId },
           data: { position: item.position, columnId: item.columnId }
@@ -312,7 +480,12 @@ router.post(
       )
     );
 
-    res.json({ ok: true });
+    const updated = await prisma.task.findMany({
+      where: { id: { in: moves.map((move) => move.id) }, userId },
+      orderBy: [{ columnId: "asc" }, { position: "asc" }],
+      include: taskInclude
+    });
+    res.json({ tasks: updated });
   })
 );
 
@@ -884,6 +1057,23 @@ const taskInputSchema = z.object({
   tags: z.array(z.string()).default([])
 });
 
+const columnInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1),
+  color: z.string().nullable().optional(),
+  position: z.number().int().min(0).default(0)
+});
+
+const reorderColumnsSchema = z
+  .object({
+    projectId: z.string().uuid(),
+    items: z.array(z.object({ id: z.string().uuid(), position: z.number().int().min(0) })).optional(),
+    orderedColumnIds: z.array(z.string().uuid()).optional()
+  })
+  .refine((input) => Boolean(input.items?.length || input.orderedColumnIds?.length), {
+    message: "No columns to reorder"
+  });
+
 const subtaskInputSchema = z.object({
   id: z.string().uuid().optional(),
   title: z.string().min(1),
@@ -952,6 +1142,32 @@ async function taskForUser(userId: string, id: string) {
   }
 
   return task;
+}
+
+async function projectForUser(userId: string, id: string) {
+  const project = await prisma.project.findFirst({
+    where: { id, userId, deletedAt: null },
+    select: { id: true, workspaceId: true, type: true }
+  });
+
+  if (!project) {
+    throw new HttpError(404, "Project not found");
+  }
+
+  return project;
+}
+
+async function columnForUser(userId: string, id: string) {
+  const column = await prisma.boardColumn.findFirst({
+    where: { id, userId, deletedAt: null },
+    select: { id: true, workspaceId: true, projectId: true }
+  });
+
+  if (!column) {
+    throw new HttpError(404, "Column not found");
+  }
+
+  return column;
 }
 
 async function subtaskForUser(userId: string, id: string) {

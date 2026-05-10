@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { currentUserId, requireAuth } from "../auth/middleware";
-import { asyncHandler } from "../http";
+import { asyncHandler, HttpError } from "../http";
 import { prisma } from "../prisma";
 
 const router = Router();
@@ -12,7 +12,7 @@ const syncChangeSchema = z.object({
   entityType: z.string().min(1),
   entityId: z.string().min(1),
   workspaceId: z.string().uuid().nullable().optional(),
-  operation: z.enum(["create", "update", "delete"]),
+  operation: z.enum(["create", "update", "delete", "reorder", "move"]),
   payload: z.unknown()
 });
 
@@ -26,8 +26,9 @@ router.get(
   "/bootstrap",
   asyncHandler(async (req, res) => {
     const userId = currentUserId(req);
-    const [projects, tasks, tags, taskTags, subtasks, reminders, notes, settings, latestChange] = await Promise.all([
+    const [projects, boardColumns, tasks, tags, taskTags, subtasks, reminders, notes, settings, latestChange] = await Promise.all([
       prisma.project.findMany({ where: { userId } }),
+      prisma.boardColumn.findMany({ where: { userId } }),
       prisma.task.findMany({ where: { userId }, include: { taskTags: { include: { tag: true } }, subtasks: true, reminders: true } }),
       prisma.tag.findMany({ where: { userId } }),
       prisma.taskTag.findMany({ where: { task: { userId } } }),
@@ -40,7 +41,7 @@ router.get(
 
     res.json({
       revision: latestChange?.revision ?? 0,
-      entities: { projects, tasks, tags, taskTags, subtasks, reminders, notes, settings }
+      entities: { projects, boardColumns, tasks, tags, taskTags, subtasks, reminders, notes, settings }
     });
   })
 );
@@ -175,6 +176,34 @@ const taskTagPayloadSchema = z
   })
   .passthrough();
 
+const boardColumnPayloadSchema = z
+  .object({
+    projectId: z.string().uuid(),
+    name: z.string().min(1),
+    color: z.string().nullable().optional(),
+    position: z.number().int().min(0).optional(),
+    workspaceId: z.string().uuid().nullable().optional()
+  })
+  .passthrough();
+
+const reorderColumnsPayloadSchema = z
+  .object({
+    projectId: z.string().uuid(),
+    items: z.array(z.object({ id: z.string().uuid(), position: z.number().int().min(0) })).optional(),
+    orderedColumnIds: z.array(z.string().uuid()).optional()
+  })
+  .refine((input) => Boolean(input.items?.length || input.orderedColumnIds?.length), {
+    message: "No columns to reorder"
+  });
+
+const taskMovePayloadSchema = z
+  .object({
+    projectId: z.string().uuid().nullable().optional(),
+    columnId: z.string().uuid().nullable().optional(),
+    position: z.number().int().min(0).optional()
+  })
+  .passthrough();
+
 async function applyChange(userId: string, change: SyncChange) {
   if (change.entityType === "project") {
     await applyProjectChange(userId, change);
@@ -183,6 +212,11 @@ async function applyChange(userId: string, change: SyncChange) {
 
   if (change.entityType === "task") {
     await applyTaskChange(userId, change);
+    return;
+  }
+
+  if (change.entityType === "board_column") {
+    await applyBoardColumnChange(userId, change);
     return;
   }
 
@@ -247,6 +281,11 @@ async function applyTaskChange(userId: string, change: SyncChange) {
     return;
   }
 
+  if (change.operation === "move" || change.operation === "reorder") {
+    await applyTaskMoveChange(userId, change);
+    return;
+  }
+
   const payload = taskPayloadSchema.parse(change.payload);
   const workspaceId = await workspaceIdFor(userId, payload.workspaceId ?? change.workspaceId);
   const projectId = payload.projectId ? await ownedProjectId(userId, payload.projectId) : null;
@@ -286,6 +325,111 @@ async function applyTaskChange(userId: string, change: SyncChange) {
   if (payload.tags) {
     await syncTaskTags(userId, workspaceId, change.entityId, payload.tags);
   }
+}
+
+async function applyBoardColumnChange(userId: string, change: SyncChange) {
+  if (change.operation === "delete") {
+    const column = await prisma.boardColumn.findFirst({
+      where: { id: change.entityId, userId },
+      select: { id: true, projectId: true }
+    });
+    if (!column) {
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.task.updateMany({
+        where: { userId, projectId: column.projectId, columnId: column.id, deletedAt: null },
+        data: { columnId: null }
+      }),
+      prisma.boardColumn.update({
+        where: { id: column.id },
+        data: { deletedAt: new Date() }
+      })
+    ]);
+    return;
+  }
+
+  if (change.operation === "reorder") {
+    const payload = reorderColumnsPayloadSchema.parse(change.payload);
+    const project = await projectForUser(userId, payload.projectId);
+    const items =
+      payload.items ??
+      payload.orderedColumnIds?.map((id, position) => ({
+        id,
+        position
+      })) ??
+      [];
+
+    const columns = await prisma.boardColumn.findMany({
+      where: { userId, projectId: project.id, id: { in: items.map((item) => item.id) }, deletedAt: null },
+      select: { id: true }
+    });
+    const ownedIds = new Set(columns.map((column) => column.id));
+    if (items.some((item) => !ownedIds.has(item.id))) {
+      throw new HttpError(404, "Column not found");
+    }
+
+    await prisma.$transaction(
+      items.map((item) =>
+        prisma.boardColumn.update({
+          where: { id: item.id },
+          data: { position: item.position }
+        })
+      )
+    );
+    return;
+  }
+
+  const payload = boardColumnPayloadSchema.parse(change.payload);
+  const project = await projectForUser(userId, payload.projectId);
+
+  await prisma.boardColumn.upsert({
+    where: { id: change.entityId },
+    create: {
+      id: change.entityId,
+      userId,
+      workspaceId: project.workspaceId,
+      projectId: project.id,
+      name: payload.name,
+      color: payload.color ?? null,
+      position: payload.position ?? 0,
+      deletedAt: null
+    },
+    update: {
+      name: payload.name,
+      color: payload.color ?? null,
+      position: payload.position ?? 0,
+      deletedAt: null
+    }
+  });
+}
+
+async function applyTaskMoveChange(userId: string, change: SyncChange) {
+  const payload = taskMovePayloadSchema.parse(change.payload);
+  const task = await taskForUser(userId, change.entityId);
+
+  if (payload.projectId && task.projectId !== payload.projectId) {
+    throw new HttpError(400, "Task does not belong to project");
+  }
+
+  if (payload.columnId) {
+    const column = await columnForUser(userId, payload.columnId);
+    if (payload.projectId && column.projectId !== payload.projectId) {
+      throw new HttpError(400, "Column does not belong to project");
+    }
+    if (task.projectId && column.projectId !== task.projectId) {
+      throw new HttpError(400, "Column does not belong to task project");
+    }
+  }
+
+  await prisma.task.update({
+    where: { id: task.id },
+    data: {
+      columnId: payload.columnId ?? null,
+      position: payload.position ?? 0
+    }
+  });
 }
 
 async function applyTagChange(userId: string, change: SyncChange) {
@@ -406,14 +550,40 @@ async function applyTaskTagChange(userId: string, change: SyncChange) {
 async function taskForUser(userId: string, taskId: string) {
   const task = await prisma.task.findFirst({
     where: { id: taskId, userId, deletedAt: null },
-    select: { id: true, workspaceId: true }
+    select: { id: true, workspaceId: true, projectId: true }
   });
 
   if (!task) {
-    throw new Error("Task not found");
+    throw new HttpError(404, "Task not found");
   }
 
   return task;
+}
+
+async function projectForUser(userId: string, projectId: string) {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, userId, deletedAt: null },
+    select: { id: true, workspaceId: true }
+  });
+
+  if (!project) {
+    throw new HttpError(404, "Project not found");
+  }
+
+  return project;
+}
+
+async function columnForUser(userId: string, columnId: string) {
+  const column = await prisma.boardColumn.findFirst({
+    where: { id: columnId, userId, deletedAt: null },
+    select: { id: true, workspaceId: true, projectId: true }
+  });
+
+  if (!column) {
+    throw new HttpError(404, "Column not found");
+  }
+
+  return column;
 }
 
 async function tagForUser(userId: string, tagId: string) {
@@ -488,7 +658,7 @@ function entityOrder(entityType: string) {
   if (entityType === "project") {
     return 0;
   }
-  if (entityType === "tag") {
+  if (entityType === "board_column" || entityType === "tag") {
     return 1;
   }
   if (entityType === "task") {

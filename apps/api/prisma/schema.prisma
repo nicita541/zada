@@ -87,6 +87,7 @@ model BoardColumn {
   workspaceId  String    @map("workspace_id") @db.Uuid
   projectId    String    @map("project_id") @db.Uuid
   name         String
+  color        String?
   position     Int
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")

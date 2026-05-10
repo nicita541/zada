@@ -2,6 +2,7 @@ export * from "./types";
 export * from "./premium";
 export * from "./notes";
 export * from "./internalLinks";
+export * from "./board";
 export * from "./quickAdd";
 export * from "./recurrence";
 export * from "./taskOutlineParser";

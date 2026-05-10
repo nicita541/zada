@@ -11,7 +11,7 @@ apps/
   desktop/   Electron wrapper and secure local file bridge
   mobile/    Capacitor Android-first shell
 packages/
-  shared/    Types, parsers, premium gates, notes sync, game-dev template
+  shared/    Types, parsers, board helpers, premium gates, notes sync, game-dev template
   api-client Browser API client
   ui/        Shared React UI primitives
 ```
@@ -96,13 +96,14 @@ Run `npm install` again after package changes so workspace links are refreshed.
 - Shared task outline parser for numbered tasks, bullets, checkboxes, descriptions in parentheses, tags, priorities, dates, repeats, reminders, task types, and parent-child relations.
 - Shared quick-add parser with tags, priorities, project refs, task types, explicit dates, repeat phrases/tokens, and Russian natural dates: `сегодня`, `завтра`, `послезавтра`.
 - Shared recurrence helper for daily, weekly, monthly, yearly, and weekday repeats.
+- Shared board helper for default project columns, column fallback, and task move position recalculation.
 - Shared internal link parser for `[[Task: ...]]`, `[[GDD: ...]]`, `[[Snippet: ...]]`, notes, concepts, files, bugs, and milestones.
 - Premium gates for online and offline entitlement checks, including `currentPeriodEnd`, `lifetime_dev`, and `admin`.
 - Notes sync helpers for `local_only`, `pending`, `synced`, and `error`.
-- API routes for auth/session restore/logout/dev password reset, import preview/confirm, billing status/features/checkout, admin grants/revokes, sync bootstrap/push/changes, core project/task/tag CRUD endpoints, subtasks, reminders, due reminders, and task-tag assignment.
+- API routes for auth/session restore/logout/dev password reset, import preview/confirm, billing status/features/checkout, admin grants/revokes, sync bootstrap/push/changes, core project/task/tag CRUD endpoints, project board columns, column/task reorder, subtasks, reminders, due reminders, and task-tag assignment.
 - Prisma schema for users, sessions, workspaces, projects, board columns, tasks, tags, subtasks, reminders, habits, notes, references, code snippets, milestones, focus sessions, subscriptions, entitlements, devices, settings, and change log.
-- React app shell with auth gate, login/register/recovery UI, desktop sidebar, mobile bottom navigation, quick add, grouped Today task list, search/filter controls, due reminder banner, project create/edit/delete/select, task detail editing with description/subtasks/reminders/repeat/tags/additional sections, import preview, notes sync controls, subscription screen, premium-gated game-dev workspace, focus, stats, and settings.
-- IndexedDB stores for projects, board columns, tasks, tags, task-tag links, subtasks, reminders, notes, references, code snippets, milestones, focus sessions, sync queue, sync metadata, subscription cache, and note sync settings. Project/task/subtask/reminder/tag mutations write locally first and enqueue sync work.
+- React app shell with auth gate, login/register/recovery UI, desktop sidebar, mobile bottom navigation, quick add, grouped Today task list, search/filter controls, due reminder banner, project create/edit/delete/select, project List/Board tabs with drag-and-drop Kanban columns/tasks, task detail editing with description/subtasks/reminders/repeat/tags/additional sections, import preview, notes sync controls, subscription screen, premium-gated game-dev workspace, focus, stats, and settings.
+- IndexedDB stores for projects, board columns, tasks, tags, task-tag links, subtasks, reminders, notes, references, code snippets, milestones, focus sessions, sync queue, sync metadata, subscription cache, and note sync settings. Project/board column/task/subtask/reminder/tag mutations write locally first and enqueue sync work.
 - Electron preload bridge for `window.zadaDesktop.openLocalPath(path)` and `window.zadaDesktop.revealInExplorer(path)` with `contextIsolation` enabled and `nodeIntegration` disabled.
 - Capacitor config wired to the shared web build.
 

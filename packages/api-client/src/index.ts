@@ -31,6 +31,18 @@ export interface ProjectDto {
   workspaceId?: string;
   updatedAt?: string;
   deletedAt?: string | null;
+  columns?: BoardColumnDto[];
+}
+
+export interface BoardColumnDto {
+  id: string;
+  workspaceId?: string;
+  projectId: string;
+  name: string;
+  color?: string | null;
+  position: number;
+  updatedAt?: string;
+  deletedAt?: string | null;
 }
 
 export interface TaskDto {
@@ -103,6 +115,11 @@ export interface TaskTagDto {
   id?: string;
   taskId: string;
   tagId: string;
+}
+
+export interface ReorderTasksInput {
+  projectId?: string;
+  moves: Array<{ taskId: string; columnId: string | null; position: number }>;
 }
 
 export interface BillingStatusResponse {
@@ -217,8 +234,33 @@ export class ZadaApiClient {
     return this.request<TaskDto>(`/tasks/${id}/duplicate`, { method: "POST" });
   }
 
-  reorderTasks(items: Array<{ id: string; position: number; columnId?: string | null }>) {
-    return this.request<{ ok: boolean }>("/tasks/reorder", { method: "POST", body: { items } });
+  reorderTasks(input: ReorderTasksInput | Array<{ id: string; position: number; columnId?: string | null }>) {
+    const body = Array.isArray(input) ? { items: input } : input;
+    return this.request<{ tasks: TaskDto[] }>("/tasks/reorder", { method: "POST", body });
+  }
+
+  getProjectColumns(projectId: string) {
+    return this.request<{ columns: BoardColumnDto[] }>(`/projects/${projectId}/columns`);
+  }
+
+  createColumn(projectId: string, input: { id?: string; name: string; color?: string | null; position?: number }) {
+    return this.request<BoardColumnDto>(`/projects/${projectId}/columns`, { method: "POST", body: input });
+  }
+
+  updateColumn(id: string, input: Partial<Pick<BoardColumnDto, "name" | "color" | "position">>) {
+    return this.request<BoardColumnDto>(`/columns/${id}`, { method: "PATCH", body: input });
+  }
+
+  deleteColumn(id: string) {
+    return this.request<void>(`/columns/${id}`, { method: "DELETE" });
+  }
+
+  reorderColumns(input: {
+    projectId: string;
+    items?: Array<{ id: string; position: number }>;
+    orderedColumnIds?: string[];
+  }) {
+    return this.request<{ columns: BoardColumnDto[] }>("/columns/reorder", { method: "POST", body: input });
   }
 
   listSubtasks(taskId: string) {

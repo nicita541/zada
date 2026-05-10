@@ -1,4 +1,4 @@
-export type SyncOperation = "create" | "update" | "delete";
+export type SyncOperation = "create" | "update" | "delete" | "reorder" | "move";
 
 export interface SyncQueueItem<TPayload = unknown> {
   id: string;

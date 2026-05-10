@@ -119,6 +119,23 @@ export const ru = {
       done: "Готово"
     }
   },
+  board: {
+    listView: "Список",
+    boardView: "Доска",
+    addColumn: "Добавить колонку",
+    columnName: "Название колонки",
+    columnPlaceholder: "Колонка",
+    taskPlaceholder: "Задача",
+    emptyColumn: "Нет задач",
+    deleteColumn: "Удалить колонку",
+    dragColumn: "Переместить колонку",
+    dragTask: "Переместить задачу",
+    subtasks: "Подзадачи",
+    reminders: "Напоминания",
+    repeat: "Повтор",
+    noTasks: "На доске нет задач",
+    taskCount: "{count}"
+  },
   calendar: {
     meta: "Основа месяца, недели и повестки",
     agenda: "Повестка",

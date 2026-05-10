@@ -1,19 +1,32 @@
 import { create } from "zustand";
-import type { AuthResponse, ProjectDto, ReminderDto, SubtaskDto, TagDto, TaskDto } from "@zada/api-client";
+import type { AuthResponse, BoardColumnDto, ProjectDto, ReminderDto, SubtaskDto, TagDto, TaskDto } from "@zada/api-client";
 import {
   createSyncQueueItem,
+  defaultBoardColumnsForProject,
   defaultNoteSyncSettings,
   getNextDueDate,
+  moveBoardTask,
   nextNoteSyncStatus,
   parseQuickAdd,
   parseTaskOutline,
+  shouldCreateDefaultColumns,
+  type BoardColumnTemplate,
   type LocalNoteDraft,
   type NoteSyncSettings,
   type SubscriptionSnapshot,
   type TaskOutlineParseResult
 } from "@zada/shared";
 import { api } from "../lib/api";
-import { db, type LocalProject, type LocalReminder, type LocalSubtask, type LocalTag, type LocalTask, type LocalTaskTag } from "../lib/db";
+import {
+  db,
+  type LocalBoardColumn,
+  type LocalProject,
+  type LocalReminder,
+  type LocalSubtask,
+  type LocalTag,
+  type LocalTask,
+  type LocalTaskTag
+} from "../lib/db";
 import { runManualSync } from "../lib/syncEngine";
 
 interface AppState {
@@ -25,6 +38,8 @@ interface AppState {
   activeProjectId: string | null;
   selectedTaskId: string | null;
   tasks: LocalTask[];
+  columnsByProjectId: Record<string, LocalBoardColumn[]>;
+  boardViewProjectId: string | null;
   subtasksByTaskId: Record<string, LocalSubtask[]>;
   remindersByTaskId: Record<string, LocalReminder[]>;
   dueReminders: LocalReminder[];
@@ -55,6 +70,17 @@ interface AppState {
   deleteTask: (id: string) => Promise<void>;
   completeTask: (id: string) => Promise<void>;
   uncompleteTask: (id: string) => Promise<void>;
+  loadProjectColumns: (projectId: string) => Promise<void>;
+  ensureDefaultColumns: (projectId: string, template?: BoardColumnTemplate[]) => Promise<LocalBoardColumn[]>;
+  createColumn: (projectId: string, input: { name: string; color?: string | null }) => Promise<LocalBoardColumn | null>;
+  updateColumn: (columnId: string, input: Partial<Pick<LocalBoardColumn, "name" | "color" | "position">>) => Promise<void>;
+  deleteColumn: (columnId: string) => Promise<void>;
+  reorderColumns: (projectId: string, orderedColumnIds: string[]) => Promise<void>;
+  moveTask: (taskId: string, targetColumnId: string | null, targetPosition: number) => Promise<void>;
+  reorderTasks: (
+    projectId: string,
+    moves: Array<{ taskId: string; columnId: string | null; position: number }>
+  ) => Promise<void>;
   setSearchQuery: (query: string) => void;
   setTaskFilters: (filters: Partial<TaskFilters>) => void;
   clearTaskFilters: () => void;
@@ -102,6 +128,7 @@ export interface TaskDraft {
   title: string;
   description?: string | null;
   projectId?: string | null;
+  columnId?: string | null;
   type?: string;
   priority?: string | null;
   startDate?: string | null;
@@ -109,6 +136,7 @@ export interface TaskDraft {
   time?: string | null;
   repeat?: string | null;
   estimatedMinutes?: number | null;
+  position?: number;
   tags?: string[];
   gameArea?: string | null;
   severity?: string | null;
@@ -194,6 +222,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeProjectId: null,
   selectedTaskId: null,
   tasks: starterTasks,
+  columnsByProjectId: {},
+  boardViewProjectId: null,
   subtasksByTaskId: {},
   remindersByTaskId: {},
   dueReminders: [],
@@ -218,8 +248,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   syncState: typeof navigator === "undefined" || navigator.onLine ? "idle" : "offline",
   setActiveView: (activeView) => set({ activeView }),
   hydrate: async () => {
-    const [projects, tasks, subtasks, reminders, tags, taskTags, notes, noteSettings, subscription] = await Promise.all([
+    const [projects, boardColumns, tasks, subtasks, reminders, tags, taskTags, notes, noteSettings, subscription] = await Promise.all([
       db.projects.toArray(),
+      db.board_columns.toArray(),
       db.tasks.toArray(),
       db.subtasks.toArray(),
       db.reminders.toArray(),
@@ -241,6 +272,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       projects: localProjects,
       activeProjectId: localProjects[0]?.id ?? null,
       tasks: localTasks,
+      columnsByProjectId: groupColumns(boardColumns.filter((column) => !column.deletedAt)),
       subtasksByTaskId: groupSubtasks(subtasks.filter((subtask) => !subtask.deletedAt)),
       remindersByTaskId: groupReminders(reminders.filter((reminder) => !reminder.deletedAt)),
       dueReminders: dueLocalReminders(reminders.filter((reminder) => !reminder.deletedAt)),
@@ -343,18 +375,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (canReachApi()) {
       try {
-        const saved = normalizeProject(
-          await api.createProject({
-            id: project.id,
-            name: project.name,
-            description: project.description,
-            type: project.type,
-            workspaceId: project.workspaceId ?? undefined
-          })
-        );
-        await db.projects.put(saved);
+        const created = await api.createProject({
+          id: project.id,
+          name: project.name,
+          description: project.description,
+          type: project.type,
+          workspaceId: project.workspaceId ?? undefined
+        });
+        const saved = normalizeProject(created);
+        const savedColumns = (created.columns ?? []).map(normalizeBoardColumn);
+        await db.transaction("rw", db.projects, db.board_columns, async () => {
+          await db.projects.put(saved);
+          if (savedColumns.length > 0) {
+            await db.board_columns.bulkPut(savedColumns);
+          }
+        });
         await clearQueuedEntity("project", project.id);
-        set({ projects: replaceById(get().projects, saved), activeProjectId: saved.id });
+        set({
+          projects: replaceById(get().projects, saved),
+          activeProjectId: saved.id,
+          columnsByProjectId:
+            savedColumns.length > 0
+              ? { ...get().columnsByProjectId, [saved.id]: savedColumns }
+              : get().columnsByProjectId
+        });
         return saved;
       } catch {
         set({ syncState: "error" });
@@ -509,6 +553,285 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   uncompleteTask: async (id) => {
     await updateCompletion(id, false, set, get);
+  },
+  loadProjectColumns: async (projectId) => {
+    const localColumns = (await db.board_columns.where("projectId").equals(projectId).toArray()).filter((column) => !column.deletedAt);
+    set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(localColumns) } });
+
+    if (canReachApi()) {
+      try {
+        const { columns } = await api.getProjectColumns(projectId);
+        const remoteColumns = columns.map(normalizeBoardColumn);
+        await db.board_columns.bulkPut(remoteColumns);
+        set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(remoteColumns) } });
+
+        if (remoteColumns.length === 0) {
+          await get().ensureDefaultColumns(projectId);
+        }
+        return;
+      } catch {
+        set({ syncState: "error" });
+      }
+    }
+
+    if (localColumns.length === 0) {
+      await get().ensureDefaultColumns(projectId);
+    }
+  },
+  ensureDefaultColumns: async (projectId, template) => {
+    const currentColumns =
+      get().columnsByProjectId[projectId] ??
+      (await db.board_columns.where("projectId").equals(projectId).toArray()).filter((column) => !column.deletedAt);
+    if (!shouldCreateDefaultColumns(currentColumns)) {
+      return sortColumns(currentColumns);
+    }
+
+    const project = get().projects.find((candidate) => candidate.id === projectId);
+    const createdAt = now();
+    const columns = (template ?? defaultBoardColumnsForProject(project?.type)).map<LocalBoardColumn>((column, position) => ({
+      id: crypto.randomUUID(),
+      workspaceId: project?.workspaceId ?? null,
+      projectId,
+      name: column.name,
+      color: column.color ?? null,
+      position,
+      updatedAt: createdAt
+    }));
+
+    await db.transaction("rw", db.board_columns, db.sync_queue, async () => {
+      await db.board_columns.bulkPut(columns);
+      await db.sync_queue.bulkPut(columns.map((column) => createSyncQueueItem("board_column", column.id, "create", column)));
+    });
+    set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: columns } });
+
+    if (canReachApi()) {
+      try {
+        const savedColumns = await Promise.all(
+          columns.map((column) =>
+            api.createColumn(projectId, {
+              id: column.id,
+              name: column.name,
+              color: column.color,
+              position: column.position
+            })
+          )
+        );
+        const normalizedColumns = savedColumns.map(normalizeBoardColumn);
+        await db.board_columns.bulkPut(normalizedColumns);
+        await Promise.all(normalizedColumns.map((column) => clearQueuedEntity("board_column", column.id)));
+        set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(normalizedColumns) } });
+        return sortColumns(normalizedColumns);
+      } catch {
+        set({ syncState: "error" });
+      }
+    }
+
+    return columns;
+  },
+  createColumn: async (projectId, input) => {
+    const name = input.name.trim();
+    const project = get().projects.find((candidate) => candidate.id === projectId);
+    if (!project || !name) {
+      return null;
+    }
+
+    const existing = get().columnsByProjectId[projectId] ?? [];
+    const column: LocalBoardColumn = {
+      id: crypto.randomUUID(),
+      workspaceId: project.workspaceId ?? null,
+      projectId,
+      name,
+      color: input.color ?? null,
+      position: existing.length,
+      updatedAt: now()
+    };
+
+    await db.transaction("rw", db.board_columns, db.sync_queue, async () => {
+      await db.board_columns.put(column);
+      await db.sync_queue.put(createSyncQueueItem("board_column", column.id, "create", column));
+    });
+    set({ columnsByProjectId: upsertColumnGroup(get().columnsByProjectId, column) });
+
+    if (canReachApi()) {
+      try {
+        const saved = normalizeBoardColumn(
+          await api.createColumn(projectId, {
+            id: column.id,
+            name: column.name,
+            color: column.color,
+            position: column.position
+          })
+        );
+        await db.board_columns.put(saved);
+        await clearQueuedEntity("board_column", column.id);
+        set({ columnsByProjectId: upsertColumnGroup(get().columnsByProjectId, saved) });
+        return saved;
+      } catch {
+        set({ syncState: "error" });
+      }
+    }
+
+    return column;
+  },
+  updateColumn: async (columnId, input) => {
+    const existing = findColumn(get().columnsByProjectId, columnId) ?? (await db.board_columns.get(columnId));
+    if (!existing) {
+      return;
+    }
+
+    const name = input.name === undefined ? existing.name : input.name.trim();
+    if (!name) {
+      return;
+    }
+
+    const updated: LocalBoardColumn = {
+      ...existing,
+      name,
+      color: input.color === undefined ? existing.color : input.color,
+      position: input.position ?? existing.position,
+      updatedAt: now()
+    };
+
+    await db.transaction("rw", db.board_columns, db.sync_queue, async () => {
+      await db.board_columns.put(updated);
+      await db.sync_queue.put(createSyncQueueItem("board_column", updated.id, "update", updated));
+    });
+    set({ columnsByProjectId: upsertColumnGroup(get().columnsByProjectId, updated) });
+
+    if (canReachApi()) {
+      try {
+        const saved = normalizeBoardColumn(
+          await api.updateColumn(columnId, {
+            name: updated.name,
+            color: updated.color,
+            position: updated.position
+          })
+        );
+        await db.board_columns.put(saved);
+        await clearQueuedEntity("board_column", columnId);
+        set({ columnsByProjectId: upsertColumnGroup(get().columnsByProjectId, saved) });
+      } catch {
+        set({ syncState: "error" });
+      }
+    }
+  },
+  deleteColumn: async (columnId) => {
+    const existing = findColumn(get().columnsByProjectId, columnId) ?? (await db.board_columns.get(columnId));
+    if (!existing) {
+      return;
+    }
+
+    const deletedAt = now();
+    const deletedColumn = { ...existing, deletedAt, updatedAt: deletedAt };
+    const movedTasks = get()
+      .tasks.filter((task) => task.projectId === existing.projectId && task.columnId === existing.id)
+      .map<LocalTask>((task) => ({ ...task, columnId: null, updatedAt: deletedAt }));
+
+    await db.transaction("rw", db.board_columns, db.tasks, db.sync_queue, async () => {
+      await db.board_columns.put(deletedColumn);
+      if (movedTasks.length > 0) {
+        await db.tasks.bulkPut(movedTasks);
+      }
+      await db.sync_queue.put(createSyncQueueItem("board_column", existing.id, "delete", { id: existing.id, deletedAt }));
+    });
+
+    set({
+      columnsByProjectId: removeColumnFromGroup(get().columnsByProjectId, existing.projectId, existing.id),
+      tasks: replaceManyById(get().tasks, movedTasks)
+    });
+
+    if (canReachApi()) {
+      try {
+        await api.deleteColumn(columnId);
+        await clearQueuedEntity("board_column", columnId);
+      } catch {
+        set({ syncState: "error" });
+      }
+    }
+  },
+  reorderColumns: async (projectId, orderedColumnIds) => {
+    const current = get().columnsByProjectId[projectId] ?? [];
+    const ordered = [
+      ...orderedColumnIds.map((id) => current.find((column) => column.id === id)).filter((column): column is LocalBoardColumn => Boolean(column)),
+      ...current.filter((column) => !orderedColumnIds.includes(column.id))
+    ].map<LocalBoardColumn>((column, position) => ({ ...column, position, updatedAt: now() }));
+    const items = ordered.map((column) => ({ id: column.id, position: column.position }));
+
+    await db.transaction("rw", db.board_columns, db.sync_queue, async () => {
+      await db.board_columns.bulkPut(ordered);
+      await db.sync_queue.put(createSyncQueueItem("board_column", projectId, "reorder", { projectId, items }));
+    });
+    set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: ordered } });
+
+    if (canReachApi()) {
+      try {
+        const { columns } = await api.reorderColumns({ projectId, items });
+        const saved = columns.map(normalizeBoardColumn);
+        await db.board_columns.bulkPut(saved);
+        await clearQueuedEntity("board_column", projectId);
+        set({ columnsByProjectId: { ...get().columnsByProjectId, [projectId]: sortColumns(saved) } });
+      } catch {
+        set({ syncState: "error" });
+      }
+    }
+  },
+  moveTask: async (taskId, targetColumnId, targetPosition) => {
+    const task = get().tasks.find((candidate) => candidate.id === taskId);
+    if (!task?.projectId) {
+      return;
+    }
+
+    const columns = get().columnsByProjectId[task.projectId] ?? (await get().ensureDefaultColumns(task.projectId));
+    const projectTasks = get().tasks.filter((candidate) => candidate.projectId === task.projectId && !candidate.deletedAt);
+    const moves = moveBoardTask(projectTasks, columns, taskId, targetColumnId, targetPosition);
+    await get().reorderTasks(task.projectId, moves);
+  },
+  reorderTasks: async (projectId, moves) => {
+    if (moves.length === 0) {
+      return;
+    }
+
+    const byTaskId = new Map(get().tasks.map((task) => [task.id, task]));
+    const updatedTasks = moves.flatMap<LocalTask>((move) => {
+      const task = byTaskId.get(move.taskId);
+      return task
+        ? [
+            {
+              ...task,
+              projectId,
+              columnId: move.columnId,
+              position: move.position,
+              updatedAt: now()
+            }
+          ]
+        : [];
+    });
+
+    await db.transaction("rw", db.tasks, db.sync_queue, async () => {
+      await db.tasks.bulkPut(updatedTasks);
+      await db.sync_queue.bulkPut(
+        updatedTasks.map((task) =>
+          createSyncQueueItem("task", task.id, "move", {
+            projectId,
+            columnId: task.columnId ?? null,
+            position: task.position ?? 0
+          })
+        )
+      );
+    });
+    set({ tasks: replaceManyById(get().tasks, updatedTasks) });
+
+    if (canReachApi()) {
+      try {
+        const { tasks } = await api.reorderTasks({ projectId, moves });
+        const saved = tasks.map(normalizeTask);
+        await db.tasks.bulkPut(saved);
+        await Promise.all(saved.map((task) => clearQueuedEntity("task", task.id)));
+        set({ tasks: replaceManyById(get().tasks, saved) });
+      } catch {
+        set({ syncState: "error" });
+      }
+    }
   },
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setTaskFilters: (filters) => set({ taskFilters: { ...get().taskFilters, ...filters } }),
@@ -981,6 +1304,7 @@ async function loadRemoteWorkspace(
     api.listDueReminders(new Date().toISOString())
   ]);
   const normalizedProjects = projects.map(normalizeProject);
+  const normalizedColumns = projects.flatMap((project) => (project.columns ?? []).map(normalizeBoardColumn));
   const normalizedTasks = tasks.map(normalizeTask);
   const normalizedTags = tags.map(normalizeTag);
   const normalizedSubtasks = tasks.flatMap((task) => (task.subtasks ?? []).map(normalizeSubtask));
@@ -1001,8 +1325,9 @@ async function loadRemoteWorkspace(
       }))
   );
 
-  await db.transaction("rw", [db.projects, db.tasks, db.tags, db.task_tags, db.subtasks, db.reminders], async () => {
+  await db.transaction("rw", [db.projects, db.board_columns, db.tasks, db.tags, db.task_tags, db.subtasks, db.reminders], async () => {
     await db.projects.bulkPut(normalizedProjects);
+    await db.board_columns.bulkPut(normalizedColumns);
     await db.tasks.bulkPut(normalizedTasks);
     await db.tags.bulkPut(normalizedTags);
     await db.task_tags.bulkPut(normalizedTaskTags);
@@ -1017,6 +1342,7 @@ async function loadRemoteWorkspace(
     projects: normalizedProjects,
     activeProjectId: normalizedProjects[0]?.id ?? null,
     tasks: normalizedTasks,
+    columnsByProjectId: groupColumns(normalizedColumns),
     tags: normalizedTags,
     taskTags: normalizedTaskTags,
     subtasksByTaskId: groupSubtasks(normalizedSubtasks),
@@ -1050,6 +1376,19 @@ function normalizeProject(project: ProjectDto): LocalProject {
     type: project.type ?? "standard",
     updatedAt: project.updatedAt ?? now(),
     deletedAt: project.deletedAt ?? null
+  };
+}
+
+function normalizeBoardColumn(column: BoardColumnDto): LocalBoardColumn {
+  return {
+    id: column.id,
+    workspaceId: column.workspaceId,
+    projectId: column.projectId,
+    name: column.name,
+    color: column.color ?? null,
+    position: column.position ?? 0,
+    updatedAt: column.updatedAt ?? now(),
+    deletedAt: column.deletedAt ?? null
   };
 }
 
@@ -1131,6 +1470,7 @@ function localTaskFromDraft(input: TaskDraft, activeProjectId: string | null): L
   return {
     id: crypto.randomUUID(),
     projectId: input.projectId === undefined ? activeProjectId : input.projectId,
+    columnId: input.columnId ?? null,
     title: input.title.trim(),
     description: input.description?.trim() || null,
     status: "todo",
@@ -1149,6 +1489,7 @@ function localTaskFromDraft(input: TaskDraft, activeProjectId: string | null): L
     stepsToReproduce: input.stepsToReproduce ?? null,
     expectedResult: input.expectedResult ?? null,
     actualResult: input.actualResult ?? null,
+    position: input.position ?? 0,
     updatedAt: now()
   };
 }
@@ -1232,6 +1573,45 @@ function replaceById<T extends { id: string }>(items: T[], next: T) {
 
 function replaceOrAppend<T extends { id: string }>(items: T[], next: T) {
   return items.some((item) => item.id === next.id) ? replaceById(items, next) : [...items, next];
+}
+
+function replaceManyById<T extends { id: string }>(items: T[], nextItems: T[]) {
+  const nextById = new Map(nextItems.map((item) => [item.id, item]));
+  const replaced = items.map((item) => nextById.get(item.id) ?? item);
+  const existingIds = new Set(items.map((item) => item.id));
+  return [...replaced, ...nextItems.filter((item) => !existingIds.has(item.id))];
+}
+
+function sortColumns(columns: LocalBoardColumn[]) {
+  return [...columns].sort((left, right) => left.position - right.position || left.name.localeCompare(right.name));
+}
+
+function groupColumns(columns: LocalBoardColumn[]) {
+  return columns.reduce<Record<string, LocalBoardColumn[]>>((groups, column) => {
+    groups[column.projectId] = sortColumns([...(groups[column.projectId] ?? []), column]);
+    return groups;
+  }, {});
+}
+
+function findColumn(groups: Record<string, LocalBoardColumn[]>, columnId: string) {
+  return Object.values(groups)
+    .flat()
+    .find((column) => column.id === columnId);
+}
+
+function upsertColumnGroup(groups: Record<string, LocalBoardColumn[]>, column: LocalBoardColumn) {
+  const current = groups[column.projectId] ?? [];
+  return {
+    ...groups,
+    [column.projectId]: sortColumns(replaceOrAppend(current, column).filter((candidate) => !candidate.deletedAt))
+  };
+}
+
+function removeColumnFromGroup(groups: Record<string, LocalBoardColumn[]>, projectId: string, columnId: string) {
+  return {
+    ...groups,
+    [projectId]: (groups[projectId] ?? []).filter((column) => column.id !== columnId)
+  };
 }
 
 function groupSubtasks(subtasks: LocalSubtask[]) {

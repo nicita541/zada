@@ -45,6 +45,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Badge, Button, Panel } from "@zada/ui";
 import { canUseFeatureOffline, gameDevTemplate, parseInternalLinks, premiumFeatures } from "@zada/shared";
+import { BoardView } from "./components/board/BoardView";
 import { useAppStore, type ViewId } from "./store/appStore";
 import type { LocalReminder, LocalSubtask, LocalTask } from "./lib/db";
 import { I18nProvider, useI18n, type Locale, type TranslationKey } from "./i18n";
@@ -477,6 +478,8 @@ function ProjectsView() {
   const { t } = useI18n();
   const projects = useAppStore((state) => state.projects);
   const tasks = useAppStore((state) => state.tasks);
+  const subtasksByTaskId = useAppStore((state) => state.subtasksByTaskId);
+  const remindersByTaskId = useAppStore((state) => state.remindersByTaskId);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const setActiveProject = useAppStore((state) => state.setActiveProject);
   const createProject = useAppStore((state) => state.createProject);
@@ -487,6 +490,7 @@ function ProjectsView() {
   const [projectDraft, setProjectDraft] = useState({ name: "", description: "" });
   const [projectEditDraft, setProjectEditDraft] = useState({ name: "", description: "" });
   const [taskDraft, setTaskDraft] = useState({ title: "", description: "" });
+  const [projectMode, setProjectMode] = useState<"list" | "board">("board");
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null;
   const projectTasks = activeProject ? tasks.filter((task) => task.projectId === activeProject.id) : [];
 
@@ -577,7 +581,35 @@ function ProjectsView() {
             );
           })}
         </div>
-        <BoardPreview projectId={activeProject?.id ?? null} />
+        {activeProject ? (
+          <>
+            <div className="project-view-tabs segmented">
+              <button className={projectMode === "list" ? "active" : ""} type="button" onClick={() => setProjectMode("list")}>
+                <ListChecks size={16} />
+                {t("board.listView")}
+              </button>
+              <button className={projectMode === "board" ? "active" : ""} type="button" onClick={() => setProjectMode("board")}>
+                <Columns3 size={16} />
+                {t("board.boardView")}
+              </button>
+            </div>
+            {projectMode === "board" ? (
+              <BoardView projectId={activeProject.id} />
+            ) : (
+              <div className="task-list project-list-view">
+                {projectTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    subtasks={subtasksByTaskId[task.id] ?? []}
+                    reminders={remindersByTaskId[task.id] ?? []}
+                  />
+                ))}
+                {projectTasks.length === 0 ? <div className="inline-alert">{t("today.noTasks")}</div> : null}
+              </div>
+            )}
+          </>
+        ) : null}
       </section>
       <aside className="page-side">
         <Panel>

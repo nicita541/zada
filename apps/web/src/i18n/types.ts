@@ -121,6 +121,23 @@ export interface TranslationDictionary {
       done: string;
     };
   };
+  board: {
+    listView: string;
+    boardView: string;
+    addColumn: string;
+    columnName: string;
+    columnPlaceholder: string;
+    taskPlaceholder: string;
+    emptyColumn: string;
+    deleteColumn: string;
+    dragColumn: string;
+    dragTask: string;
+    subtasks: string;
+    reminders: string;
+    repeat: string;
+    noTasks: string;
+    taskCount: string;
+  };
   calendar: {
     meta: string;
     agenda: string;
