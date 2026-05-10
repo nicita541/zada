@@ -54,6 +54,8 @@ npm test
 npm run build
 ```
 
+Prisma migration folders under `apps/api/prisma/migrations/` are source-controlled and should be committed with schema changes.
+
 ## Environment
 
 The API loads `.env` from its current workspace first and then falls back to the root `.env`. Prisma CLI is most reliable when the root env is copied into `apps/api/.env`:
