@@ -2,6 +2,36 @@
 
 This report compares the current repository with the target Zada MVP. The current codebase is a runnable foundation/app shell, not a complete production MVP.
 
+## Current Focus
+
+Current development focus is **not** new large modules.
+
+Do **not** start:
+
+- Calendar full implementation
+- Habits
+- Focus timer
+- Game Dev deep workspace
+- Desktop/mobile packaging
+- Payment provider
+- Full sync conflict engine
+
+Current priority:
+
+1. Stabilize and polish existing core UI.
+2. Make Zada task-first and user-friendly.
+3. Improve Today, Projects, Board, Task Detail, and basic Notes UX.
+4. Fix import project creation/assignment.
+5. Keep local-first behavior and i18n intact.
+
+UX direction:
+
+- YouGile-like readable Kanban for Board/task cards.
+- TickTick-like simple task-first workflow for Today.
+- Tasks are primary content.
+- Projects are secondary organization.
+- Avoid admin/developer dashboard feeling.
+
 | Module | Status | Evidence | What is missing | Priority |
 |---|---|---|---|---|
 | Auth | Done for MVP auth flow | `apps/api/src/routes/auth.ts`, `apps/api/src/services/authService.ts`, `apps/web/src/App.tsx` | Register/login/refresh/me/logout work, frontend has auth gate/session restore, browser audit covered the auth gate and logout, and reset password has a dev-only token flow. Production email delivery and profile editing are still future work. | High |
@@ -11,13 +41,13 @@ This report compares the current repository with the target Zada MVP. The curren
 | Board / Kanban | Done for MVP board workflow | `apps/web/src/components/board/BoardView.tsx`, `apps/web/src/store/appStore.ts`, `apps/api/src/routes/projects.ts`, `packages/shared/src/board.ts` | Project board has real columns, List/Board tabs, column create/rename/delete/reorder, task add/move/reorder, IndexedDB persistence, API endpoints, and sync queue support. Deleting a column preserves tasks by detaching them and queues those task moves for sync. Swimlanes, WIP limits, and advanced board automation are future work. | High |
 | Calendar | Skeleton | `apps/web/src/App.tsx` | Calendar is a visual placeholder with agenda data from local tasks only; no month/week switching or real scheduling logic. | Medium |
 | Habits | Skeleton | `apps/web/src/App.tsx`, `apps/api/prisma/schema.prisma` | Static habit cards only; no habit CRUD or logging UI/API route. | Medium |
-| Notes | Partial | `apps/web/src/App.tsx`, `apps/web/src/store/appStore.ts`, `apps/api/src/routes/projects.ts` | Notes can be created locally and API has CRUD, but editor is basic and backend sync is not fully applied. | High |
+| Notes | Partial | `apps/web/src/App.tsx`, `apps/web/src/store/appStore.ts`, `apps/api/src/routes/projects.ts` | Notes can be created locally and API has CRUD, but editor is basic and backend sync is not fully applied. Basic edit/delete/list UX still needs product polish so Notes do not feel like a placeholder. | High |
 | Notes offline/local-only/sync settings | Partial | `apps/web/src/lib/db.ts`, `apps/web/src/lib/syncEngine.ts`, `packages/shared/src/notes.ts` | Toggle affects local sync queue behavior, but enable prompt/upload workflow and full conflict handling are missing. | High |
 | Focus timer | Skeleton | `apps/web/src/App.tsx`, `apps/api/prisma/schema.prisma` | UI timer is static; no running timer state or persisted focus sessions. | Medium |
 | Statistics | Skeleton | `apps/web/src/App.tsx` | Chart renders sample/local counts only; no real analytics queries or premium advanced stats. | Medium |
-| Import system | Partial | `packages/shared/src/taskOutlineParser.ts`, `apps/web/src/App.tsx`, `apps/api/src/routes/import.ts` | Preview and local confirm exist; API confirm creates tasks, but file upload, full validation UX, and conflict handling are incomplete. | High |
-| Zada Task Outline parser | Partial | `packages/shared/src/taskOutlineParser.ts`, `packages/shared/src/__tests__/taskOutlineParser.test.ts` | Parses core outline syntax, but needs broader edge-case coverage and UI/API parity validation. | High |
-| Game Dev Workspace | Skeleton | `packages/shared/src/gameDevTemplate.ts`, `apps/api/src/services/importService.ts`, `apps/web/src/App.tsx` | Template and gated UI exist, but the workspace is not a full project area with persistent GDD/concept workflows. | High |
+| Import system | Partial | `packages/shared/src/taskOutlineParser.ts`, `apps/web/src/App.tsx`, `apps/api/src/routes/import.ts` | Preview and local confirm exist; API confirm creates tasks, but file upload, full validation UX, and conflict handling are incomplete. User-tested issue: importing text with `# Проект: RPG Demo` may create tasks without creating/using the project correctly. | High |
+| Zada Task Outline parser | Partial | `packages/shared/src/taskOutlineParser.ts`, `packages/shared/src/__tests__/taskOutlineParser.test.ts` | Parses core outline syntax, but needs broader edge-case coverage and UI/API parity validation, especially project creation/assignment from `# Проект: ...`. | High |
+| Game Dev Workspace | Skeleton | `packages/shared/src/gameDevTemplate.ts`, `apps/api/src/services/importService.ts`, `apps/web/src/App.tsx` | Template and gated UI exist, but the workspace is not a full project area with persistent GDD/concept workflows. Do not expand this before core task UI is stabilized. | High |
 | GDD / Game Concept | Skeleton | `packages/shared/src/gameDevTemplate.ts`, `apps/api/src/services/importService.ts` | Default note contents can be created by API, but there is no dedicated editor/viewer or section navigation. | High |
 | Internal links | Partial | `packages/shared/src/internalLinks.ts`, `apps/web/src/App.tsx` | Parser and display exist, but autocomplete and click-to-open object navigation are missing. | Medium |
 | References | Partial | `apps/api/src/routes/projects.ts`, `apps/api/prisma/schema.prisma` | API CRUD exists, but no complete references UI and no desktop-specific local reference workflow in web UI. | Medium |
@@ -33,10 +63,26 @@ This report compares the current repository with the target Zada MVP. The curren
 | Desktop Electron bridge | Partial | `apps/desktop/src/main.ts`, `apps/desktop/src/preload.ts` | Secure bridge exists with context isolation, but installer/tray/notifications/local reference UX are not fully validated. | Medium |
 | Mobile Capacitor shell | Skeleton | `apps/mobile/capacitor.config.ts`, `apps/mobile/README.md` | Capacitor config exists, but Android project/build is not generated and native notifications are not wired through UI. | Medium |
 | PWA | Partial | `apps/web/public/manifest.webmanifest`, `apps/web/public/sw.js`, `apps/web/src/main.tsx` | Manifest and service worker exist, but app shell caching strategy and offline install behavior need browser validation. | Medium |
-| Language/i18n | Partial | `apps/web/src/i18n/*`, `apps/web/src/App.tsx` | Russian default and English switching are implemented for visible current UI; future screens must continue using i18n keys. | High |
+| Language/i18n | Partial | `apps/web/src/i18n/*`, `apps/web/src/App.tsx` | Russian default and English switching are implemented for visible current UI; future screens must continue using i18n keys. User-tested issue: language switcher spacing currently needs refinement. | High |
 | README/run instructions | Partial | `README.md` | Windows run instructions exist; they should be updated whenever npm/Prisma/dev-server behavior changes. | Medium |
 | Tests | Partial | `packages/shared/src/__tests__/*`, `apps/web/src/i18n/i18n.test.ts` | Parser/premium/i18n tests exist, but API, sync, UI, and E2E coverage are still missing. | High |
-| Core UI/UX | Partial | `apps/web/src/App.tsx`, `apps/web/src/styles.css`, `apps/web/src/i18n/*`, `packages/shared/src/taskViews.ts` | Browser-based UX audit covered auth gate/logout, Today Quick Add/grouping, Projects, Project Detail List/Board, Task Detail, Kanban layout, and mobile navigation. Fixes landed for local-day Today grouping, clearer Quick Add placeholder, List-first project detail, duplicate project task creation removal, less technical sync error text, and simpler Task Detail tags. Skeleton modules remain intentionally grouped under Later and still need full product work. | High |
+| Core UI/UX | Partial | `apps/web/src/App.tsx`, `apps/web/src/styles.css`, `apps/web/src/i18n/*`, `packages/shared/src/taskViews.ts` | Core flows work, but user-tested issues remain: UI still feels too technical in places, sidebar can feel too dominant, some counters/chips/text spacing feels glued, action menus are overloaded, subtasks are not visible enough without opening task detail, Notes feel placeholder-like, and import with `# Проект: RPG Demo` may not create/use the project correctly. Current UI direction should move closer to YouGile-style readable Kanban and TickTick-style task-first Today. | High |
+
+## Current User-Tested UI Issues
+
+The user tested the app manually and reported these priority issues:
+
+1. Some text, counters, chips and icons look visually glued together.
+2. Language switcher spacing looks broken/glued.
+3. The UI still sometimes feels made for programmers, not regular users.
+4. Action/context menus are overloaded; delete and common actions are hard to find.
+5. Notes exist but feel unfinished because edit/delete/basic management is weak.
+6. Subtasks are hard to see without opening task detail.
+7. Task hierarchy should be easier to scan visually.
+8. Projects and project creation currently feel too visually dominant.
+9. Board should move closer to YouGile-style compact readable task cards.
+10. Today should move closer to TickTick-style simple task-first workflow.
+11. Import with `# Проект: RPG Demo` should create or use that project and attach imported tasks to it.
 
 ## UI Behavior Notes
 
