@@ -280,6 +280,7 @@ export const en = {
     emptySubtasks: "No subtasks yet",
     emptySubtasksDescription: "Break the task into small steps.",
     subtasksProgress: "Subtasks {done}/{total}",
+    moreSubtasks: "more",
     reminders: "Reminders",
     reminderAt: "Reminder time",
     reminderRequired: "Choose reminder date and time.",

@@ -520,7 +520,6 @@ function TaskRow({
   const toggleTask = useAppStore((state) => state.toggleTask);
   const selectTask = useAppStore((state) => state.selectTask);
   const project = useAppStore((state) => state.projects.find((candidate) => candidate.id === task.projectId));
-  const completedSubtasks = subtasks.filter((subtask) => subtask.completed).length;
   const activeReminders = reminders.filter((reminder) => !reminder.dismissedAt).length;
   const overdue = Boolean(task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10) && !task.completed);
 
@@ -542,6 +541,7 @@ function TaskRow({
           </div>
         </div>
         {task.description ? <p>{task.description}</p> : null}
+        <SubtaskPreview subtasks={subtasks} />
         <div className="task-meta">
           {project ? <span>{project.name}</span> : <span>{t("projects.inbox")}</span>}
           {task.dueDate ? <span className={overdue ? "overdue" : ""}>{task.dueDate}</span> : null}
@@ -550,12 +550,6 @@ function TaskRow({
             <span title={t("taskDetail.repeat")}>
               <Repeat2 size={12} />
               {repeatLabel(t, task.repeat)}
-            </span>
-          ) : null}
-          {subtasks.length > 0 ? (
-            <span title={t("taskDetail.subtasks")}>
-              <ListChecks size={12} />
-              {completedSubtasks}/{subtasks.length}
             </span>
           ) : null}
           {activeReminders > 0 ? (
@@ -573,6 +567,35 @@ function TaskRow({
         <MoreHorizontal size={16} />
       </button>
     </article>
+  );
+}
+
+function SubtaskPreview({ subtasks }: { subtasks: LocalSubtask[] }) {
+  const { t } = useI18n();
+  if (subtasks.length === 0) {
+    return null;
+  }
+
+  const orderedSubtasks = [...subtasks].sort((left, right) => left.position - right.position);
+  const visibleSubtasks = orderedSubtasks.slice(0, 3);
+  const completedSubtasks = orderedSubtasks.filter((subtask) => subtask.completed).length;
+  const hiddenCount = orderedSubtasks.length - visibleSubtasks.length;
+
+  return (
+    <div className="subtask-preview" aria-label={t("taskDetail.subtasks")}>
+      <div className="subtask-preview-head">
+        <ListChecks size={12} />
+        <span>{completedSubtasks}/{orderedSubtasks.length}</span>
+      </div>
+      <div className="subtask-preview-list">
+        {visibleSubtasks.map((subtask) => (
+          <span className={subtask.completed ? "done" : ""} key={subtask.id}>
+            {subtask.title}
+          </span>
+        ))}
+        {hiddenCount > 0 ? <span className="subtask-more">+{hiddenCount} {t("taskDetail.moreSubtasks")}</span> : null}
+      </div>
+    </div>
   );
 }
 
@@ -1635,46 +1658,42 @@ function TaskDetailModal() {
     setTagDraft("");
   }
 
+  const hasBugDetails = draft.type === "bug" || Boolean(draft.stepsToReproduce || draft.expectedResult || draft.actualResult);
+
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("taskDetail.title")}>
       <section className="task-detail-modal">
         <div className="modal-head">
-          <div>
-            <h2>{t("taskDetail.title")}</h2>
-            <span>
-              {activeProject?.name ?? t("taskDetail.noProject")} · {draft.priority ? draft.priority.toUpperCase() : t("taskDetail.noPriority")} ·{" "}
-              {draft.dueDate || t("today.noDate")}
-            </span>
+          <div className="modal-title-stack">
+            <div className="task-detail-title-row">
+              <button
+                className="check-button"
+                type="button"
+                title={t("today.toggleComplete")}
+                onClick={() => (activeTask.completed ? uncompleteTask(activeTask.id) : completeTask(activeTask.id))}
+              >
+                {activeTask.completed ? <Check size={15} /> : null}
+              </button>
+              <input
+                className="task-title-input"
+                aria-label={t("taskDetail.taskTitle")}
+                value={draft.title}
+                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+              />
+            </div>
+            <div className="task-detail-meta">
+              <span>{activeProject?.name ?? t("taskDetail.noProject")}</span>
+              <span>{draft.priority ? draft.priority.toUpperCase() : t("taskDetail.noPriority")}</span>
+              <span>{draft.dueDate || t("today.noDate")}</span>
+              <span>{activeTask.completed ? t("today.completedOnly") : t("today.activeOnly")}</span>
+            </div>
           </div>
           <button className="icon-button small" type="button" title={t("common.close")} onClick={() => selectTask(null)}>
             <X size={16} />
           </button>
         </div>
-        <div className="task-detail-title-row">
-          <button
-            className="check-button"
-            type="button"
-            title={t("today.toggleComplete")}
-            onClick={() => (activeTask.completed ? uncompleteTask(activeTask.id) : completeTask(activeTask.id))}
-          >
-            {activeTask.completed ? <Check size={15} /> : null}
-          </button>
-          <input
-            className="task-title-input"
-            aria-label={t("taskDetail.taskTitle")}
-            value={draft.title}
-            onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-          />
-        </div>
         {detailMessage ? <div className="form-message">{detailMessage}</div> : null}
-        <section className="detail-section">
-          <PanelTitle icon={<FileText size={18} />} title={t("taskDetail.descriptionSection")} />
-          <label>
-            <span>{t("taskDetail.description")}</span>
-            <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
-          </label>
-        </section>
-        <div className="form-grid core-fields">
+        <div className="form-grid core-fields task-detail-compact-fields">
           <label>
             <span>{t("taskDetail.project")}</span>
             <select value={draft.projectId} onChange={(event) => setDraft({ ...draft, projectId: event.target.value })}>
@@ -1706,7 +1725,16 @@ function TaskDetailModal() {
             <input type="time" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} />
           </label>
         </div>
-        <section className="detail-section">
+
+        <section className="detail-section task-detail-main-section">
+          <PanelTitle icon={<FileText size={18} />} title={t("taskDetail.descriptionSection")} />
+          <label>
+            <span>{t("taskDetail.description")}</span>
+            <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+          </label>
+        </section>
+
+        <section className="detail-section task-detail-main-section">
           <PanelTitle icon={<ListChecks size={18} />} title={t("taskDetail.subtasksProgress", { done: completedSubtasks, total: subtasks.length })} />
           {subtasks.length > 0 ? (
             <div className="detail-list">
@@ -1727,9 +1755,9 @@ function TaskDetailModal() {
               ))}
             </div>
           ) : (
-            <EmptyState title={t("taskDetail.emptySubtasks")} description={t("taskDetail.emptySubtasksDescription")} />
+            <span className="quiet-empty">{t("taskDetail.emptySubtasks")}</span>
           )}
-          <form className="inline-form" onSubmit={submitSubtask}>
+          <form className="inline-form compact-inline-form" onSubmit={submitSubtask}>
             <input
               value={subtaskDraft}
               onChange={(event) => setSubtaskDraft(event.target.value)}
@@ -1742,74 +1770,78 @@ function TaskDetailModal() {
           </form>
         </section>
 
-        <section className="detail-section">
-          <PanelTitle icon={<Bell size={18} />} title={t("taskDetail.reminders")} />
-          {reminders.length > 0 ? (
-            <div className="detail-list">
-              {reminders.map((reminder) => (
-                <div className="detail-list-row" key={reminder.id}>
-                  <span>{new Date(reminder.remindAt).toLocaleString()}</span>
-                  <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => removeReminder(reminder.id)}>
-                    <Trash2 size={15} />
+        <section className="detail-section task-detail-main-section">
+          <PanelTitle icon={<Tag size={18} />} title={t("taskDetail.tags")} />
+          {activeTask.tags.length > 0 ? (
+            <div className="tag-pool">
+              {activeTask.tags.map((tagName) => {
+                const tag = tags.find((candidate) => candidate.name === tagName);
+                return (
+                  <button
+                    key={tagName}
+                    className="active"
+                    type="button"
+                    onClick={() => (tag ? removeTaskTag(activeTask.id, tag.id) : undefined)}
+                  >
+                    #{tagName}
                   </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <EmptyState title={t("taskDetail.emptyReminders")} description={t("taskDetail.emptyRemindersDescription")} />
+            <span className="quiet-empty">{t("taskDetail.emptyTags")}</span>
           )}
-          <form className="inline-form" onSubmit={submitReminder}>
-            <input
-              type="datetime-local"
-              value={reminderDraft}
-              onChange={(event) => setReminderDraft(event.target.value)}
-              aria-label={t("taskDetail.reminderAt")}
-            />
-            <Button type="submit">
-              <Clock size={16} />
-              {t("common.add")}
-            </Button>
-          </form>
-        </section>
-
-        <section className="detail-section">
-          <PanelTitle icon={<Repeat2 size={18} />} title={t("taskDetail.repeat")} />
-          <select value={draft.repeat} onChange={(event) => setDraft({ ...draft, repeat: event.target.value })}>
-            <option value="">{t("taskDetail.repeatNone")}</option>
-            <option value="daily">{t("taskDetail.repeatDaily")}</option>
-            <option value="weekly">{t("taskDetail.repeatWeekly")}</option>
-            <option value="monthly">{t("taskDetail.repeatMonthly")}</option>
-            <option value="yearly">{t("taskDetail.repeatYearly")}</option>
-            <option value="weekdays">{t("taskDetail.repeatWeekdays")}</option>
-          </select>
-          <span className="form-message">{draft.repeat ? t("taskDetail.repeatCompletionNote") : t("taskDetail.noRepeat")}</span>
-        </section>
-
-        <section className="detail-section">
-          <PanelTitle icon={<Tag size={18} />} title={t("taskDetail.tags")} />
-          <div className="tag-pool">
-            {tags.map((tag) => {
-              const active = activeTask.tags.includes(tag.name);
-              return (
-                <button
-                  key={tag.id}
-                  className={active ? "active" : ""}
-                  type="button"
-                  onClick={() => (active ? removeTaskTag(activeTask.id, tag.id) : assignTaskTag(activeTask.id, tag.id))}
-                >
-                  #{tag.name}
-                </button>
-              );
-            })}
-          </div>
-          {tags.length === 0 ? <EmptyState title={t("taskDetail.emptyTags")} /> : null}
-          <form className="inline-form" onSubmit={submitTag}>
+          <form className="inline-form compact-inline-form" onSubmit={submitTag}>
             <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder={t("taskDetail.tagPlaceholder")} />
             <Button type="submit">
               <Plus size={16} />
               {t("taskDetail.addTag")}
             </Button>
           </form>
+        </section>
+
+        <section className="detail-section task-detail-settings-grid">
+          <div className="detail-compact-setting">
+            <PanelTitle icon={<Bell size={18} />} title={t("taskDetail.reminders")} />
+            {reminders.length > 0 ? (
+              <div className="detail-list compact-detail-list">
+                {reminders.map((reminder) => (
+                  <div className="detail-list-row" key={reminder.id}>
+                    <span>{new Date(reminder.remindAt).toLocaleString()}</span>
+                    <button className="icon-button small" type="button" title={t("common.delete")} onClick={() => removeReminder(reminder.id)}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="quiet-empty">{t("taskDetail.emptyReminders")}</span>
+            )}
+            <form className="inline-form compact-inline-form" onSubmit={submitReminder}>
+              <input
+                type="datetime-local"
+                value={reminderDraft}
+                onChange={(event) => setReminderDraft(event.target.value)}
+                aria-label={t("taskDetail.reminderAt")}
+              />
+              <Button type="submit" variant="secondary">
+                <Clock size={16} />
+                {t("common.add")}
+              </Button>
+            </form>
+          </div>
+          <div className="detail-compact-setting">
+            <PanelTitle icon={<Repeat2 size={18} />} title={t("taskDetail.repeat")} />
+            <select value={draft.repeat} onChange={(event) => setDraft({ ...draft, repeat: event.target.value })}>
+              <option value="">{t("taskDetail.repeatNone")}</option>
+              <option value="daily">{t("taskDetail.repeatDaily")}</option>
+              <option value="weekly">{t("taskDetail.repeatWeekly")}</option>
+              <option value="monthly">{t("taskDetail.repeatMonthly")}</option>
+              <option value="yearly">{t("taskDetail.repeatYearly")}</option>
+              <option value="weekdays">{t("taskDetail.repeatWeekdays")}</option>
+            </select>
+            {draft.repeat ? <span className="form-message">{t("taskDetail.repeatCompletionNote")}</span> : null}
+          </div>
         </section>
 
         <details className="detail-section detail-accordion">
@@ -1850,7 +1882,7 @@ function TaskDetailModal() {
             <span>{t("taskDetail.buildVersion")}</span>
             <input value={draft.buildVersion} onChange={(event) => setDraft({ ...draft, buildVersion: event.target.value })} />
           </label>
-          {draft.type === "bug" ? (
+          {hasBugDetails ? (
             <>
               <label>
                 <span>{t("taskDetail.stepsToReproduce")}</span>
@@ -1870,14 +1902,12 @@ function TaskDetailModal() {
             </>
           ) : null}
         </details>
-        <div className="toolbar modal-actions">
+        <div className="toolbar modal-actions task-detail-actions">
           <Button type="button" onClick={saveTask}>
             <Pencil size={16} />
             {t("common.save")}
           </Button>
-        </div>
-        <div className="danger-zone">
-          <Button type="button" variant="danger" onClick={remove}>
+          <Button type="button" variant="secondary" className="danger-soft" onClick={remove}>
             <Trash2 size={16} />
             {t("common.delete")}
           </Button>

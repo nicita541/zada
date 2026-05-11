@@ -263,7 +263,6 @@ function BoardTaskCard({
   onOpenTask: (taskId: string) => void;
 }) {
   const { t } = useI18n();
-  const completedSubtasks = subtasks.filter((subtask) => subtask.completed).length;
   const activeReminders = reminders.filter((reminder) => !reminder.dismissedAt).length;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: taskDragId(task.id),
@@ -286,18 +285,13 @@ function BoardTaskCard({
       {...listeners}
     >
       <strong>{task.title}</strong>
+      <BoardSubtaskPreview subtasks={subtasks} />
       <div className="task-meta board-task-meta">
         {task.priority ? <span className={`priority-chip priority-${task.priority}`}>{task.priority.toUpperCase()}</span> : null}
         {task.dueDate ? <span>{task.dueDate}</span> : null}
         {task.tags.slice(0, 3).map((tag) => (
           <span key={tag}>#{tag}</span>
         ))}
-        {subtasks.length > 0 ? (
-          <span title={t("board.subtasks")}>
-            <CheckSquare size={12} />
-            {completedSubtasks}/{subtasks.length}
-          </span>
-        ) : null}
         {activeReminders > 0 ? (
           <span title={t("board.reminders")}>
             <Bell size={12} />
@@ -311,6 +305,35 @@ function BoardTaskCard({
         ) : null}
       </div>
     </button>
+  );
+}
+
+function BoardSubtaskPreview({ subtasks }: { subtasks: LocalSubtask[] }) {
+  const { t } = useI18n();
+  if (subtasks.length === 0) {
+    return null;
+  }
+
+  const orderedSubtasks = [...subtasks].sort((left, right) => left.position - right.position);
+  const visibleSubtasks = orderedSubtasks.slice(0, 2);
+  const completedSubtasks = orderedSubtasks.filter((subtask) => subtask.completed).length;
+  const hiddenCount = orderedSubtasks.length - visibleSubtasks.length;
+
+  return (
+    <div className="subtask-preview board-subtask-preview" aria-label={t("board.subtasks")}>
+      <div className="subtask-preview-head">
+        <CheckSquare size={12} />
+        <span>{completedSubtasks}/{orderedSubtasks.length}</span>
+      </div>
+      <div className="subtask-preview-list">
+        {visibleSubtasks.map((subtask) => (
+          <span className={subtask.completed ? "done" : ""} key={subtask.id}>
+            {subtask.title}
+          </span>
+        ))}
+        {hiddenCount > 0 ? <span className="subtask-more">+{hiddenCount} {t("taskDetail.moreSubtasks")}</span> : null}
+      </div>
+    </div>
   );
 }
 

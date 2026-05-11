@@ -282,6 +282,7 @@ export interface TranslationDictionary {
     emptySubtasks: string;
     emptySubtasksDescription: string;
     subtasksProgress: string;
+    moreSubtasks: string;
     reminders: string;
     reminderAt: string;
     reminderRequired: string;

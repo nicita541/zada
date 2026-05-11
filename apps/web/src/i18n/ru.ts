@@ -280,6 +280,7 @@ export const ru = {
     emptySubtasks: "Подзадач пока нет",
     emptySubtasksDescription: "Разбейте задачу на маленькие шаги.",
     subtasksProgress: "Подзадачи {done}/{total}",
+    moreSubtasks: "ещё",
     reminders: "Напоминания",
     reminderAt: "Время напоминания",
     reminderRequired: "Выберите дату и время напоминания.",
