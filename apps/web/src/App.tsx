@@ -287,7 +287,6 @@ function TodayView() {
   const taskFilters = useAppStore((state) => state.taskFilters);
   const setTaskFilters = useAppStore((state) => state.setTaskFilters);
   const clearTaskFilters = useAppStore((state) => state.clearTaskFilters);
-  const completedCount = tasks.filter((task) => task.completed).length;
   const visibleTasks = filterTasksForView(tasks, projects, searchQuery, taskFilters);
   const openTasks = visibleTasks.filter((task) => !task.completed);
   const todayGroups = groupTodayTasksByDueDate(visibleTasks);
@@ -296,8 +295,8 @@ function TodayView() {
   const isFiltered = taskFilters.status !== "todo" || Boolean(taskFilters.priority || taskFilters.projectId || taskFilters.type || taskFilters.tag || taskFilters.noDate);
 
   return (
-    <div className="page-grid">
-      <section className="page-main">
+    <div className="page-grid today-layout">
+      <section className="page-main today-main">
         <PageHeader title={t("nav.today")} meta={t("today.metaOpenTasks", { count: openTasks.length })} />
         <QuickAdd />
         <FilterChips
@@ -323,15 +322,7 @@ function TodayView() {
         ) : null}
       </section>
 
-      <aside className="page-side">
-        <Panel>
-          <PanelTitle icon={<Gauge size={18} />} title={t("today.dailyLoad")} />
-          <div className="metric-grid">
-            <Metric label={t("today.open")} value={openTasks.length} />
-            <Metric label={t("common.done")} value={completedCount} />
-            <Metric label={t("common.sync")} value={t("common.local")} />
-          </div>
-        </Panel>
+      <aside className="page-side today-side">
         <Panel>
           <PanelTitle icon={<Filter size={18} />} title={t("today.filters")} />
           <div className="filter-stack">
@@ -543,9 +534,11 @@ function TaskRow({
           <h3>{task.title}</h3>
           <div className="task-row-badges">
             {task.priority ? <Badge tone={task.priority === "p1" ? "danger" : "neutral"}>{task.priority.toUpperCase()}</Badge> : null}
-            <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
-              {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
-            </Badge>
+            {task.type !== "feature" ? (
+              <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
+                {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
+              </Badge>
+            ) : null}
           </div>
         </div>
         {task.description ? <p>{task.description}</p> : null}

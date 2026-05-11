@@ -317,6 +317,39 @@ section {
   margin-bottom: 16px;
 }
 
+.quick-add-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.quick-add-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: -6px 0 12px;
+}
+
+.quick-add-preview strong {
+  min-height: 22px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.today-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+}
+
+.today-main .quick-add {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
 .task-list,
 .note-list,
 .compact-list,
@@ -377,6 +410,63 @@ section {
 
 .task-row.done h3 {
   text-decoration: line-through;
+}
+
+.today-main .task-row {
+  gap: 10px;
+  padding: 10px;
+  box-shadow: none;
+}
+
+.today-main .task-row:hover {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+}
+
+.today-main .task-row.done {
+  background: color-mix(in srgb, var(--surface-2) 58%, var(--surface));
+}
+
+.today-main .task-row.done .task-meta {
+  opacity: 0.72;
+}
+
+.today-main .task-body h3 {
+  font-size: 14px;
+}
+
+.today-main .task-body p {
+  margin-top: 4px;
+}
+
+.today-main .task-meta {
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.today-main .task-meta span {
+  min-height: 21px;
+  padding: 2px 7px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.today-main .task-row .icon-button {
+  opacity: 0.48;
+}
+
+.today-side .ui-panel {
+  box-shadow: none;
+}
+
+.today-side .filter-stack {
+  gap: 8px;
+}
+
+.today-side .filter-stack select,
+.today-side .filter-stack .ui-button {
+  min-height: 36px;
+  font-size: 13px;
 }
 
 .task-open-button {
@@ -510,29 +600,29 @@ section {
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 14px;
+  gap: 6px;
+  margin: -4px 0 14px;
 }
 
 .filter-chips button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 30px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
   color: var(--muted);
-  padding: 0 12px;
-  font-size: 13px;
+  padding: 0 10px;
+  font-size: 12px;
   line-height: 1;
   white-space: nowrap;
 }
 
 .filter-chips button.active,
 .filter-chips button:hover {
-  border-color: var(--primary);
-  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  background: color-mix(in srgb, var(--primary-soft) 76%, var(--surface));
   color: var(--primary);
 }
 
@@ -1646,6 +1736,10 @@ section {
   .calendar-layout,
   .game-layout {
     grid-template-columns: 1fr;
+  }
+
+  .today-side .filter-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .board-strip {
