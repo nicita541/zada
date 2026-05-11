@@ -58,17 +58,44 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .sidebar {
   border-right: 1px solid var(--border);
-  background: var(--surface);
-  padding: 18px;
+  background: color-mix(in srgb, var(--surface) 86%, var(--bg));
+  padding: 14px 12px;
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar .brand-row {
+  gap: 10px;
+  min-height: 42px;
+  margin-bottom: 18px;
+  padding: 0 4px;
+}
+
+.sidebar .brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--primary) 84%, var(--surface));
+  font-size: 14px;
+}
+
+.sidebar .brand-name {
+  font-size: 14px;
+}
+
+.sidebar .brand-meta {
+  max-width: 156px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brand-row {
@@ -101,14 +128,14 @@ button {
 
 .sidebar-nav {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .nav-section-label {
-  margin: 18px 8px 6px;
+  margin: 16px 10px 6px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 750;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -120,28 +147,58 @@ button {
   color: var(--muted);
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 40px;
+  gap: 9px;
+  min-height: 36px;
   border-radius: 8px;
   padding: 0 10px;
   width: 100%;
   text-align: left;
+  font-size: 14px;
+  font-weight: 550;
+  position: relative;
+}
+
+.nav-button svg,
+.mobile-nav svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  opacity: 0.82;
 }
 
 .nav-button.active,
 .nav-button:hover,
 .mobile-nav button.active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+  color: var(--text);
+}
+
+.nav-button.active::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.nav-button.active {
+  padding-left: 13px;
 }
 
 .nav-button-muted {
-  min-height: 36px;
-  font-size: 13px;
+  min-height: 32px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .nav-button-muted:not(.active) {
-  opacity: 0.74;
+  opacity: 0.58;
+}
+
+.nav-button-muted:hover {
+  opacity: 0.86;
 }
 
 .workspace {
@@ -206,6 +263,10 @@ button {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.topbar-actions {
+  gap: 10px;
 }
 
 .content-scroll {
@@ -339,6 +400,19 @@ section {
   gap: 12px;
 }
 
+.task-title-row {
+  align-items: flex-start;
+}
+
+.task-row-badges {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 .task-body h3,
 .project-card h3,
 .habit-card h3,
@@ -363,17 +437,28 @@ section {
 .link-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
   margin-top: 10px;
 }
 
 .task-meta span,
 .link-pills span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--muted);
-  padding: 3px 8px;
+  padding: 3px 9px;
   font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.task-meta span.overdue {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .check-button {
@@ -391,17 +476,23 @@ section {
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin: 0 0 14px;
 }
 
 .filter-chips button {
-  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
   color: var(--muted);
-  padding: 0 11px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .filter-chips button.active,
@@ -471,12 +562,17 @@ section {
 .ui-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 24px;
   border-radius: 999px;
-  padding: 3px 8px;
+  padding: 3px 9px;
   font-size: 12px;
-  line-height: 1;
+  font-weight: 650;
+  line-height: 1.25;
   background: var(--surface-2);
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .ui-badge-success {
@@ -543,6 +639,7 @@ section {
   display: block;
   margin-top: 4px;
   font-size: 20px;
+  line-height: 1.1;
 }
 
 .compact-row {
@@ -726,7 +823,8 @@ section {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
+  column-gap: 9px;
+  row-gap: 8px;
   min-height: 36px;
 }
 
@@ -802,9 +900,8 @@ section {
 }
 
 .board-task-card .task-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  min-height: 22px;
+  padding: 2px 8px;
 }
 
 .board-add-task,
@@ -993,24 +1090,42 @@ section {
 .segmented {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  padding: 3px;
+  gap: 3px;
+  padding: 4px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-2);
 }
 
 .segmented button {
-  min-height: 32px;
+  min-height: 34px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .segmented button.active {
   background: var(--surface);
   color: var(--primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.language-row {
+  align-items: center;
+}
+
+.language-row > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.language-segmented {
+  min-width: 220px;
 }
 
 .form-message {
@@ -1495,16 +1610,24 @@ section {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     border-top: 1px solid var(--border);
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 94%, var(--bg));
     padding: 6px;
   }
 
   .mobile-nav button {
-    min-height: 54px;
+    min-height: 52px;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     font-size: 11px;
+    font-weight: 600;
     justify-content: center;
+    border-radius: 8px;
+    padding: 5px 4px;
+  }
+
+  .mobile-nav button.active {
+    background: color-mix(in srgb, var(--surface-2) 76%, transparent);
+    color: var(--text);
   }
 
   .fab {
