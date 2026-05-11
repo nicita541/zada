@@ -252,6 +252,8 @@ export interface TranslationDictionary {
     name: string;
     email: string;
     password: string;
+    roleUser: string;
+    roleAdmin: string;
   };
   taskDetail: {
     title: string;

@@ -249,7 +249,9 @@ export const ru = {
     register: "Регистрация",
     name: "Имя",
     email: "Email",
-    password: "Пароль"
+    password: "Пароль",
+    roleUser: "Пользователь",
+    roleAdmin: "Администратор"
   },
   taskDetail: {
     title: "Детали задачи",
@@ -301,13 +303,13 @@ export const ru = {
   },
   subscription: {
     plan: "План: {plan}",
-    premiumGates: "Pro-функции",
+    premiumGates: "Подписка",
     purchaseUnavailable: "Покупка подписки пока недоступна.",
     featureEnabled: "включено",
-    free: "Бесплатный",
+    free: "Бесплатный тариф",
     pro: "Pro",
-    lifetimeDev: "Lifetime Dev",
-    admin: "Admin",
+    lifetimeDev: "Пожизненный тариф",
+    admin: "Администратор",
     inactive: "Неактивна",
     active: "Активна",
     pastDue: "Просрочена",

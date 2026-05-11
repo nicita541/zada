@@ -249,7 +249,9 @@ export const en = {
     register: "Register",
     name: "Name",
     email: "Email",
-    password: "Password"
+    password: "Password",
+    roleUser: "User",
+    roleAdmin: "Admin"
   },
   taskDetail: {
     title: "Task detail",
@@ -301,10 +303,10 @@ export const en = {
   },
   subscription: {
     plan: "Plan: {plan}",
-    premiumGates: "Premium Gates",
+    premiumGates: "Subscription",
     purchaseUnavailable: "Subscription purchase is not available yet.",
     featureEnabled: "enabled",
-    free: "Free",
+    free: "Free plan",
     pro: "Pro",
     lifetimeDev: "Lifetime Dev",
     admin: "Admin",
@@ -332,7 +334,7 @@ export const en = {
     }
   },
   noteSync: {
-    title: "Notes Sync",
+    title: "Notes synchronization",
     description: "Notes synchronization",
     enabledDescription: "New changes enter the sync queue.",
     disabledDescription: "New changes stay on this device.",

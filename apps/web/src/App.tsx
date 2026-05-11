@@ -1335,14 +1335,14 @@ function AccountPanel() {
   const logout = useAppStore((state) => state.logout);
 
   return (
-    <Panel>
+    <Panel className="settings-card">
       <PanelTitle icon={<User size={18} />} title={t("settings.account")} />
       <div className="settings-row profile-row">
-        <div>
+        <div className="settings-copy">
           <strong>{currentUser?.name || currentUser?.email || t("settings.notSignedIn")}</strong>
           <span>{currentUser?.email ?? t("settings.notSignedIn")}</span>
         </div>
-        <Badge tone="success">{currentUser?.role ?? "user"}</Badge>
+        <Badge tone="success">{accountRoleLabel(t, currentUser?.role)}</Badge>
       </div>
       <div className="toolbar">
         <Button type="button" variant="secondary" onClick={logout}>
@@ -1365,10 +1365,10 @@ function SubscriptionView({ compact = false }: { compact?: boolean }) {
       {!compact ? (
         <PageHeader title={t("nav.subscription")} meta={t("subscription.plan", { plan: planLabel(t, subscription.plan) })} />
       ) : null}
-      <Panel>
+      <Panel className="settings-card subscription-card">
         <PanelTitle icon={<Sparkles size={18} />} title={t("subscription.premiumGates")} />
         <div className="subscription-head">
-          <div>
+          <div className="settings-copy">
             <strong>{planLabel(t, subscription.plan)}</strong>
             <span>{statusLabel(t, subscription.status)}</span>
           </div>
@@ -1402,10 +1402,10 @@ function NoteSyncPanel() {
   const toggleNotesSync = useAppStore((state) => state.toggleNotesSync);
 
   return (
-    <Panel>
+    <Panel className="settings-card">
       <PanelTitle icon={<RefreshCw size={18} />} title={t("noteSync.title")} />
       <div className="settings-row">
-        <div>
+        <div className="settings-copy">
           <strong>{t("noteSync.description")}</strong>
           <span>{settings.notesEnabled ? t("noteSync.enabledDescription") : t("noteSync.disabledDescription")}</span>
         </div>
@@ -1988,6 +1988,15 @@ function statusLabel(t: TFunction, status: string): string {
   };
 
   return t(keyByStatus[status] ?? "subscription.inactive");
+}
+
+function accountRoleLabel(t: TFunction, role?: string): string {
+  const keyByRole: Record<string, TranslationKey> = {
+    user: "settings.roleUser",
+    admin: "settings.roleAdmin"
+  };
+
+  return role && keyByRole[role] ? t(keyByRole[role]) : t("settings.roleUser");
 }
 
 function featureLabel(t: TFunction, featureKey: string): string {

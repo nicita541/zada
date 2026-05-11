@@ -286,11 +286,8 @@ function BoardTaskCard({
       {...listeners}
     >
       <strong>{task.title}</strong>
-      <div className="task-meta">
-        <Badge tone={task.type === "bug" ? "danger" : task.type === "design" ? "info" : "neutral"}>
-          {dynamicLabel(t, `taskTypes.${task.type}`, task.type)}
-        </Badge>
-        {task.priority ? <span>{task.priority.toUpperCase()}</span> : null}
+      <div className="task-meta board-task-meta">
+        {task.priority ? <span className={`priority-chip priority-${task.priority}`}>{task.priority.toUpperCase()}</span> : null}
         {task.dueDate ? <span>{task.dueDate}</span> : null}
         {task.tags.slice(0, 3).map((tag) => (
           <span key={tag}>#{tag}</span>
@@ -362,11 +359,6 @@ function columnKey(columnId: string | null) {
 
 function dndTransform(transform: { x: number; y: number } | null) {
   return transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined;
-}
-
-function dynamicLabel(t: (key: TranslationKey) => string, key: string, fallback: string): string {
-  const translated = t(key as TranslationKey);
-  return translated === key ? fallback : translated;
 }
 
 function localizedColumnName(t: (key: TranslationKey) => string, column: LocalBoardColumn): string {
